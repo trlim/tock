@@ -74,6 +74,7 @@ struct Firestorm {
     timer: &'static drivers::timer::TimerDriver<'static,
                 VirtualMuxAlarm<'static, sam4l::ast::Ast>>,
     tmp006: &'static drivers::tmp006::TMP006<'static>,
+    lps331ap: &'static drivers::lps331ap::LPS331AP<'static>,
     isl29035: &'static drivers::isl29035::Isl29035<'static>,
     spi: &'static drivers::spi::Spi<'static, sam4l::spi::Spi>,
     nrf51822: &'static drivers::nrf51822_serialization::Nrf51822Serialization<'static, sam4l::usart::USART>,
@@ -96,6 +97,7 @@ impl Platform for Firestorm {
             4 => f(Some(self.spi)),
             5 => f(Some(self.nrf51822)),
             6 => f(Some(self.isl29035)),
+            7 => f(Some(self.lps331ap)),
             _ => f(None)
         }
     }
@@ -288,8 +290,6 @@ unsafe fn set_pin_primary_functions() {
     PA[11].configure(None);
     // P7       -- GPIO Pin
     PA[19].configure(None);
-    // P8       -- GPIO Pin
-    PA[13].configure(None);
 
     // none     -- GPIO Pin
     PA[14].configure(None);
@@ -306,6 +306,9 @@ unsafe fn set_pin_primary_functions() {
     PC[19].configure(None);
     // LED0     -- GPIO Pin
     PC[10].configure(None);
+
+    // Pressure sensor interrupt
+    PA[13].configure(None);
 }
 
 #[no_mangle]
@@ -365,6 +368,21 @@ pub unsafe fn reset_handler() {
     tmp006_i2c.set_client(tmp006);
     sam4l::gpio::PA[9].set_client(tmp006);
 
+    // Setup a mux for the second I2C bus on storm
+    static_init!(mux_i2c1: MuxI2C<'static> = MuxI2C::new(&sam4l::i2c::I2C1),
+                 20);
+    sam4l::i2c::I2C1.set_client(mux_i2c1);
+
+    // Configure the LPS331AP pressure sensor.
+    static_init!(lps331ap_i2c: drivers::virtual_i2c::I2CDevice =
+                     drivers::virtual_i2c::I2CDevice::new(mux_i2c1, 0x5C),
+                 32);
+    static_init!(lps331ap: drivers::lps331ap::LPS331AP<'static> =
+                     drivers::lps331ap::LPS331AP::new(lps331ap_i2c, &sam4l::gpio::PA[13], &mut drivers::lps331ap::BUFFER),
+                 40);
+    lps331ap_i2c.set_client(lps331ap);
+    sam4l::gpio::PA[13].set_client(lps331ap);
+
     // Configure the ISL29035, device address 0x44
     static_init!(isl29035_i2c: drivers::virtual_i2c::I2CDevice =
                      drivers::virtual_i2c::I2CDevice::new(mux_i2c, 0x44),
@@ -392,7 +410,7 @@ pub unsafe fn reset_handler() {
     sam4l::spi::SPI.init(spi as &hil::spi_master::SpiCallback);
 
     // set GPIO driver controlling remaining GPIO pins
-    static_init!(gpio_pins: [&'static sam4l::gpio::GPIOPin; 12] =
+    static_init!(gpio_pins: [&'static sam4l::gpio::GPIOPin; 11] =
                  [
                      &sam4l::gpio::PC[10], // LED_0
                      &sam4l::gpio::PA[16], // P2
@@ -401,13 +419,12 @@ pub unsafe fn reset_handler() {
                      &sam4l::gpio::PA[10], // P5
                      &sam4l::gpio::PA[11], // P6
                      &sam4l::gpio::PA[19], // P7
-                     &sam4l::gpio::PA[13], // P8
                      &sam4l::gpio::PA[17], /* STORM_INT (nRF51822) */
                      &sam4l::gpio::PC[14], /* RSLP (RF233 sleep line) */
                      &sam4l::gpio::PC[15], /* RRST (RF233 reset line) */
                      &sam4l::gpio::PA[20], /* RIRQ (RF233 interrupt) */
                  ],
-                 12 * 4
+                 11 * 4
     );
     static_init!(gpio: drivers::gpio::GPIO<'static, sam4l::gpio::GPIOPin> =
                      drivers::gpio::GPIO::new(gpio_pins),
@@ -428,11 +445,12 @@ pub unsafe fn reset_handler() {
                      gpio: gpio,
                      timer: timer,
                      tmp006: tmp006,
+                     lps331ap: lps331ap,
                      isl29035: isl29035,
                      spi: spi,
                      nrf51822: nrf_serialization,
                  },
-                 28);
+                 32);
 
     sam4l::usart::USART3.configure(sam4l::usart::USARTParams {
         //client: &console,
@@ -483,7 +501,6 @@ pub unsafe fn reset_handler() {
 
     let mut chip = sam4l::chip::Sam4l::new();
     chip.mpu().enable_mpu();
-
 
     main::main(firestorm, &mut chip, load_processes());
 }
