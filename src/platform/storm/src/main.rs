@@ -11,6 +11,7 @@ extern crate sam4l;
 extern crate support;
 
 use hil::Controller;
+use hil::alarm;
 use hil::spi_master::SpiMaster;
 use drivers::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use drivers::virtual_i2c::MuxI2C;
@@ -383,18 +384,18 @@ pub unsafe fn reset_handler() {
     lps331ap_i2c.set_client(lps331ap);
     sam4l::gpio::PA[13].set_client(lps331ap);
 
-    // Configure the SI7021 temperature/humidity sensor.
-    static_init!(si7021_i2c: drivers::virtual_i2c::I2CDevice =
-                     drivers::virtual_i2c::I2CDevice::new(mux_i2c1, 0x40),
-                 32);
-    static_init!(si7021_virtual_alarm: VirtualMuxAlarm<'static, sam4l::ast::Ast> =
-                     VirtualMuxAlarm::new(mux_alarm),
-                 24);
-    static_init!(si7021: drivers::si7021::SI7021<'static> =
-                     drivers::si7021::SI7021::new(si7021_i2c, si7021_virtual_alarm, &mut drivers::si7021::BUFFER),
-                 40);
-    si7021_i2c.set_client(si7021);
-    si7021_virtual_alarm.set_client(si7021);
+    // // Configure the SI7021 temperature/humidity sensor.
+    // static_init!(si7021_i2c: drivers::virtual_i2c::I2CDevice =
+    //                  drivers::virtual_i2c::I2CDevice::new(mux_i2c1, 0x40),
+    //              32);
+    // static_init!(si7021_virtual_alarm: VirtualMuxAlarm<'static, sam4l::ast::Ast> =
+    //                  VirtualMuxAlarm::new(mux_alarm),
+    //              24);
+    // static_init!(si7021: drivers::si7021::SI7021<'static, alarm::Alarm> =
+    //                  drivers::si7021::SI7021::new(si7021_i2c, si7021_virtual_alarm, &mut drivers::si7021::BUFFER),
+    //              40);
+    // si7021_i2c.set_client(si7021);
+    // si7021_virtual_alarm.set_client(si7021);
 
     // Configure the ISL29035, device address 0x44
     static_init!(isl29035_i2c: drivers::virtual_i2c::I2CDevice =
