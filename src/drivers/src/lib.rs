@@ -14,6 +14,7 @@ pub mod nrf51822_serialization;
 pub mod timer;
 pub mod tmp006;
 pub mod lps331ap;
+pub mod si7021;
 pub mod spi;
 pub mod virtual_alarm;
 pub mod virtual_i2c;
