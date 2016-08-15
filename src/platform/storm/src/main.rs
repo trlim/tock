@@ -75,6 +75,7 @@ struct Firestorm {
                 VirtualMuxAlarm<'static, sam4l::ast::Ast>>,
     tmp006: &'static drivers::tmp006::TMP006<'static>,
     lps331ap: &'static drivers::lps331ap::LPS331AP<'static>,
+    si7021: &'static drivers::si7021::SI7021<'static, VirtualMuxAlarm<'static, sam4l::ast::Ast>>,
     isl29035: &'static drivers::isl29035::Isl29035<'static>,
     spi: &'static drivers::spi::Spi<'static, sam4l::spi::Spi>,
     nrf51822: &'static drivers::nrf51822_serialization::Nrf51822Serialization<'static, sam4l::usart::USART>,
@@ -98,6 +99,7 @@ impl Platform for Firestorm {
             5 => f(Some(self.nrf51822)),
             6 => f(Some(self.isl29035)),
             7 => f(Some(self.lps331ap)),
+            8 => f(Some(self.si7021)),
             _ => f(None)
         }
     }
@@ -459,11 +461,12 @@ pub unsafe fn reset_handler() {
                      timer: timer,
                      tmp006: tmp006,
                      lps331ap: lps331ap,
+                     si7021: si7021,
                      isl29035: isl29035,
                      spi: spi,
                      nrf51822: nrf_serialization,
                  },
-                 32);
+                 36);
 
     sam4l::usart::USART3.configure(sam4l::usart::USARTParams {
         //client: &console,

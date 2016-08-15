@@ -3,17 +3,10 @@ use common::take_cell::TakeCell;
 use main::{AppId, Callback, Driver};
 use hil::i2c;
 use hil::alarm;
+use hil::alarm::Frequency;
 
 // Buffer to use for I2C messages
 pub static mut BUFFER : [u8; 14] = [0; 14];
-
-/// Register values
-// const REGISTER_AUTO_INCREMENT: u8 = 0x80;
-
-// const CTRL_REG1_POWER_ON: u8 = 0x80;
-// const CTRL_REG1_BLOCK_DATA_ENABLE: u8 = 0x04;
-// const CTRL_REG2_ONE_SHOT: u8 = 0x01;
-// const CTRL_REG3_INTERRUPT1_DATAREADY: u8 = 0x04;
 
 #[allow(dead_code)]
 enum Registers {
@@ -35,53 +28,22 @@ enum Registers {
     ReadFirmwareVersionB = 0xb8,
 }
 
-
-
-
-
-
-
-
 /// States of the I2C protocol with the LPS331AP.
 #[derive(Clone,Copy,PartialEq)]
 enum State {
     Idle,
 
-    // /// Read the WHO_AM_I register. This should return 0xBB.
-    // SelectWhoAmI,
-    // ReadingWhoAmI,
+    /// States to read the internal ID
+    SelectElectronicId1,
+    ReadElectronicId1,
+    SelectElectronicId2,
+    ReadElectronicId2,
 
-    // /// Process of taking a pressure measurement.
-    // /// Start with chip powered off
-    // TakeMeasurementInit,
-    // /// Then clear the current reading (just in case it exists)
-    // /// to reset the interrupt line.
-    // TakeMeasurementClear,
-    // /// Enable a single shot measurement with interrupt when data is ready.
-    // TakeMeasurementConfigure,
-
-    // /// Read the 3 pressure registers.
-    // ReadMeasurement,
-    // /// Calculate pressure and call the callback with the value.
-    // GotMeasurement,
-
-
-
-SelectElectronicId1,
-ReadElectronicId1,
-SelectElectronicId2,
-ReadElectronicId2,
-TakeMeasurementInit,
-ReadRhMeasurement,
-ReadTempMeasurement,
-GotMeasurement,
-
-
-
-
-
-
-
+    /// States to take the current measurement
+    TakeMeasurementInit,
+    ReadRhMeasurement,
+    ReadTempMeasurement,
+    GotMeasurement,
 
     /// Disable I2C and release buffer
     Done,
@@ -97,7 +59,6 @@ pub struct SI7021<'a, A: alarm::Alarm + 'a> {
 
 impl<'a, A: alarm::Alarm + 'a> SI7021<'a, A> {
     pub fn new(i2c: &'a i2c::I2CDevice, alarm: &'a A, buffer: &'static mut [u8]) -> SI7021<'a, A> {
-    // pub fn new(i2c: &'a i2c::I2CDevice, alarm: &'a A, buffer: &'static mut [u8]) -> SI7021<'a> {
         // setup and return struct
         SI7021{
             i2c: i2c,
@@ -121,10 +82,6 @@ impl<'a, A: alarm::Alarm + 'a> SI7021<'a, A> {
     }
 
     pub fn take_measurement(&self) {
-
-        // self.interrupt_pin.enable_input(gpio::InputMode::PullNone);
-        // self.interrupt_pin.enable_interrupt(0, gpio::InterruptMode::RisingEdge);
-
         self.buffer.take().map(|buffer| {
             // turn on i2c to send commands
             self.i2c.enable();
@@ -140,11 +97,6 @@ impl<'a, A: alarm::Alarm + 'a> i2c::I2CClient for SI7021<'a, A> {
     fn command_complete(&self, buffer: &'static mut [u8], _error: i2c::Error) {
         match self.state.get() {
             State::SelectElectronicId1 => {
-                // buffer[0] = Registers::ReadElectronicIdByteOneA as u8;
-                // buffer[1] = Registers::ReadElectronicIdByteOneB as u8;
-                // self.i2c.write(buffer, 2);
-                // self.state.set(State::SelectElectronicId1);
-
                 self.i2c.read(buffer, 8);
                 self.state.set(State::ReadElectronicId1);
             },
@@ -161,16 +113,8 @@ impl<'a, A: alarm::Alarm + 'a> i2c::I2CClient for SI7021<'a, A> {
                 buffer[1] = Registers::ReadElectronicIdByteTwoB as u8;
                 self.i2c.write(buffer, 2);
                 self.state.set(State::SelectElectronicId2);
-                // self.buffer.replace(buffer);
-                // self.i2c.disable();
-                // self.state.set(State::Idle);
             },
             State::SelectElectronicId2 => {
-                // buffer[0] = Registers::ReadElectronicIdByteOneA as u8;
-                // buffer[1] = Registers::ReadElectronicIdByteOneB as u8;
-                // self.i2c.write(buffer, 2);
-                // self.state.set(State::SelectElectronicId1);
-
                 self.i2c.read(buffer, 6);
                 self.state.set(State::ReadElectronicId2);
             },
@@ -180,44 +124,18 @@ impl<'a, A: alarm::Alarm + 'a> i2c::I2CClient for SI7021<'a, A> {
                 self.state.set(State::Idle);
             },
             State::TakeMeasurementInit => {
+
+                let interval = (20 as u32) * <A::Frequency>::frequency() / 1000;
+
                 let now = self.alarm.now();
-                let tics = self.alarm.now().wrapping_add(1000);
+                let tics = self.alarm.now().wrapping_add(interval);
                 self.alarm.set_alarm(tics);
-                // self.state.set(State::TakeMeasurementWait);
+
+                // Now wait for timer to expire
                 self.buffer.replace(buffer);
                 self.i2c.disable();
                 self.state.set(State::Idle);
-
-
-                // let now = self.alarm.now();
-                // let mut next_alarm = u32::max_value();
-                // let mut next_dist = u32::max_value();
-                // for timer in self.app_timer.iter() {
-                //     timer.enter(|timer, _| {
-                //         if timer.interval > 0 {
-                //             let t_alarm = timer.t0.wrapping_add(timer.interval);
-                //             let t_dist = t_alarm.wrapping_sub(now);
-                //             if next_dist > t_dist {
-                //                 next_alarm = t_alarm;
-                //                 next_dist = t_dist;
-                //             }
-                //         }
-                //     });
-                // }
-                // if next_alarm != u32::max_value() {
-                //     self.alarm.set_alarm(next_alarm);
-                // }
-
-
-
-                // buffer[0] = Registers::PressOutXl as u8 | REGISTER_AUTO_INCREMENT;
-                // self.i2c.write(buffer, 1);
-                // self.state.set(State::TakeMeasurementClear);
             },
-            // State::TakeMeasurementClear => {
-            //     self.i2c.read(buffer, 3);
-            //     self.state.set(State::TakeMeasurementConfigure);
-            // },
             State::ReadRhMeasurement => {
                 buffer[2] = buffer[0];
                 buffer[3] = buffer[1];
@@ -230,19 +148,19 @@ impl<'a, A: alarm::Alarm + 'a> i2c::I2CClient for SI7021<'a, A> {
                 self.state.set(State::GotMeasurement);
             },
             State::GotMeasurement => {
-                let pressure = (((buffer[2] as u32) << 16) | ((buffer[1] as u32) << 8) | (buffer[0] as u32)) as u32;
 
-                // Returned as microbars
-                let pressure_ubar = (pressure * 1000) / 4096;
+                // Temperature in hundredths of degrees centigrade
+                let temp_raw = (((buffer[0] as u32) << 8) | (buffer[1] as u32)) as u32;
+                let temp = (((temp_raw * 17572) / 65536) - 4685) as i16;
+
+                // Humidity in hundredths of percent
+                let humidity_raw = (((buffer[2] as u32) << 8) | (buffer[3] as u32)) as u32;
+                let humidity = (((humidity_raw * 125 * 100) / 65536) - 600) as u16;
 
                 self.callback.get().map(|mut cb|
-                    cb.schedule(pressure_ubar as usize, 0, 0)
+                    cb.schedule(temp as usize, humidity as usize, 0)
                 );
 
-                // buffer[0] = Registers::CtrlReg1 as u8;
-                // buffer[1] = 0;
-                // self.i2c.write(buffer, 2);
-                // self.state.set(State::Done);
                 self.buffer.replace(buffer);
                 self.i2c.disable();
                 self.state.set(State::Idle);
