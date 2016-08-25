@@ -1,0 +1,8 @@
+Current status:
+  NRF boot sequence sends 8 bytes (0x70 - 0x77)
+  In completion event, resends 8 bytes
+  Kernel is panicking, not sure where yet
+  Moving the send earlier in the boot sequence causes a panic
+  Interrrupt handler in UART makes some unsafe assmptions on Options being
+    not None
+

@@ -2,8 +2,10 @@ use common::{RingBuffer,Queue};
 use nvic;
 use rtc;
 use gpio;
+use uart;
 use timer;
 use main;
+use hil::gpio::GPIOPin;
 use peripheral_interrupts::NvicIdx;
 
 const IQ_SIZE: usize = 100;
@@ -33,6 +35,8 @@ impl main::Chip for NRF51 {
     }
 
     fn service_pending_interrupts(&mut self) {
+        unsafe {gpio::PORT[24].toggle();}
+
         unsafe {
         INTERRUPT_QUEUE.as_mut().unwrap().dequeue().map(|interrupt| {
             match interrupt {
@@ -41,6 +45,7 @@ impl main::Chip for NRF51 {
                 NvicIdx::TIMER0  => timer::TIMER0.handle_interrupt(),
                 NvicIdx::TIMER1  => timer::ALARM1.handle_interrupt(),
                 NvicIdx::TIMER2  => timer::TIMER2.handle_interrupt(),
+                NvicIdx::UART0  => uart::UART0.handle_interrupt(),
                 _ => {}
             }
             nvic::enable(interrupt);

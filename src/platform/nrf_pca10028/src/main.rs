@@ -50,6 +50,7 @@ use drivers::timer::TimerDriver;
 use nrf51::timer::TimerAlarm;
 use nrf51::timer::ALARM1;
 use hil::gpio::GPIOPin;
+use hil::uart::UART;
 
 // The nRF51 DK LEDs (see back of board)
 const LED1_PIN:  usize = 21;
@@ -64,6 +65,8 @@ const BUTTON3_PIN: usize = 19;
 const BUTTON4_PIN: usize = 20;
 
 pub mod systick;
+
+static mut bytes: [u8; 8] = [0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77];
 
 unsafe fn load_process() -> &'static mut [Option<main::process::Process<'static>>] {
     use core::intrinsics::{volatile_load,volatile_store};
@@ -97,6 +100,15 @@ pub struct Platform {
     console: &'static drivers::console::Console<'static, nrf51::uart::UART>,
 }
 
+impl hil::uart::Client for Platform {
+    fn read_done(&self, byte: u8) {
+
+    }
+
+    fn write_done(&self, buf: &'static mut[u8]) {
+        unsafe {nrf51::uart::UART0.send_bytes(&mut bytes as &'static mut [u8; 8], bytes.len());}
+    }
+}
 
 impl main::Platform for Platform {
     #[inline(never)]
@@ -164,9 +176,6 @@ pub unsafe fn reset_handler() {
                  &nrf51::gpio::PORT[12], //  
                  ], 4 * 22);
 
-    nrf51::gpio::PORT[LED1_PIN].enable_output();
-    nrf51::gpio::PORT[LED1_PIN].clear();
-
     static_init!(gpio: drivers::gpio::GPIO<'static, nrf51::gpio::GPIOPin> =
                  drivers::gpio::GPIO::new(gpio_pins), 20);
     for pin in gpio_pins.iter() {
@@ -180,6 +189,15 @@ pub unsafe fn reset_handler() {
                                                 24);
     nrf51::uart::UART0.set_client(console);
 
+    nrf51::uart::UART0.init(hil::uart::UARTParams {
+        baud_rate: 115200,
+        data_bits: 8,
+        parity: hil::uart::Parity::None,
+        mode: hil::uart::Mode::Normal});
+    nrf51::uart::UART0.enable_tx();
+
+//        nrf51::uart::UART0.send_byte(0x55);
+//        nrf51::uart::UART0.send_byte(0x8f);
     // The timer driver is built on top of hardware timer 1, which is implemented
     // as an HIL Alarm. Timer 0 has some special functionality for the BLE transciever,
     // so is reserved for that use. This should be rewritten to use the RTC (off the
@@ -221,6 +239,8 @@ pub unsafe fn reset_handler() {
     // clock::CLOCK instead.
     systick::reset();
     systick::enable(true); 
+    nrf51::uart::UART0.send_bytes(&mut bytes as &'static mut [u8; 8], 8);
+    nrf51::gpio::PORT[LED1_PIN].toggle();
     main::main(platform, &mut nrf51::chip::NRF51::new(), load_process());
 
 }
