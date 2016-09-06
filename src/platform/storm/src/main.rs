@@ -209,8 +209,7 @@ unsafe fn set_pin_primary_functions() {
     // PRI_TX   --  USART3 TX
     PB[10].configure(Some(A));
 
-    // U1_CTS   --  USART0 CTS
-    PB[11].configure(Some(A));
+
 
     // U1_RTS   --  USART0 RTS
     PB[12].configure(Some(A));
@@ -311,6 +310,9 @@ unsafe fn set_pin_primary_functions() {
 
     // Pressure sensor interrupt
     PA[13].configure(None);
+
+    // Light sensor interrupt
+    PB[11].configure(None);
 }
 
 #[no_mangle]
@@ -384,6 +386,16 @@ pub unsafe fn reset_handler() {
                  40);
     lps331ap_i2c.set_client(lps331ap);
     sam4l::gpio::PA[13].set_client(lps331ap);
+
+    // Configure the TSL2561 light sensor.
+    static_init!(tsl2561_i2c: drivers::virtual_i2c::I2CDevice =
+                     drivers::virtual_i2c::I2CDevice::new(mux_i2c1, 0x29),
+                 32);
+    static_init!(tsl2561: drivers::tsl2561::TSL2561<'static> =
+                     drivers::tsl2561::TSL2561::new(tsl2561_i2c, &sam4l::gpio::PB[11], &mut drivers::tsl2561::BUFFER),
+                 40);
+    tsl2561_i2c.set_client(tsl2561);
+    sam4l::gpio::PB[11].set_client(tsl2561);
 
     // Configure the SI7021 temperature/humidity sensor.
     static_init!(si7021_i2c: drivers::virtual_i2c::I2CDevice =
@@ -517,7 +529,7 @@ pub unsafe fn reset_handler() {
 
     let mut chip = sam4l::chip::Sam4l::new();
     chip.mpu().enable_mpu();
-
+tsl2561.take_measurement();
     main::main(firestorm, &mut chip, load_processes());
 }
 
