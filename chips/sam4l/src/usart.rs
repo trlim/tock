@@ -1,11 +1,15 @@
-use core::mem;
-use dma::{DMAChannel, DMAClient, DMAPeripheral};
-use helpers::*;
-use kernel::hil::{uart, Controller};
-use kernel::hil::uart::{Parity, Mode};
-use nvic;
-use pm::{self, Clock, PBAClock};
+/// USART SAM4L implementation
 
+// rust language modules
+use core::mem;
+// local modules
+use nvic;
+use dma;
+use pm;
+// other modules
+use kernel::hil;
+
+// Register map for SAM4L USART
 #[repr(C, packed)]
 struct Registers {
     cr: u32,
@@ -32,7 +36,6 @@ struct Registers {
     wpsr: u32,
     version: u32,
 }
-
 const SIZE: usize = 0x4000;
 const BASE_ADDRESS: usize = 0x40024000;
 
@@ -46,72 +49,45 @@ pub enum Location {
 
 pub struct USART {
     regs: *mut Registers,
-    client: Option<&'static uart::Client>,
-    clock: Clock,
+    client: Option<&'static hil::uart::Client>,
+    clock: pm::Clock,
     nvic: nvic::NvicIdx,
-    dma_peripheral: DMAPeripheral,
-    dma: Option<&'static mut DMAChannel>,
+    rx_dma: Option<&'static mut dma::DMAChannel>,
+    rx_dma_peripheral: dma::DMAPeripheral,
+    tx_dma: Option<&'static mut dma::DMAChannel>,
+    tx_dma_peripheral: dma::DMAPeripheral,
 }
 
-pub struct USARTParams {
-    // pub client: &'static Shared<uart::Client>,
-    pub baud_rate: u32,
-    pub data_bits: u8,
-    pub parity: Parity,
-    pub mode: Mode,
-}
-
-impl Controller for USART {
-    type Config = USARTParams;
-
-    fn configure(&self, params: USARTParams) {
-        //   self.client = Some(params.client.borrow_mut());
-        let chrl = ((params.data_bits - 1) & 0x3) as u32;
-        let mode =
-            (params.mode as u32) /* mode */
-            | 0 << 4 /*USCLKS*/
-            | chrl << 6 /* Character Length */
-            | (params.parity as u32) << 9 /* Parity */
-            | 0 << 12 /* Number of stop bits = 1 */
-            | 1 << 19 /* Oversample at 8 times baud rate */;
-
-        self.enable_clock();
-        self.set_baud_rate(params.baud_rate);
-        self.set_mode(mode);
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.ttgr, 4);
-        self.enable_rx_interrupts();
-    }
-}
-
+// USART hardware peripherals on SAM4L
 pub static mut USART0: USART =
-    USART::new(Location::USART0, PBAClock::USART0, nvic::NvicIdx::USART0);
+    USART::new(Location::USART0, pm::PBAClock::USART0, nvic::NvicIdx::USART0);
 pub static mut USART1: USART =
-    USART::new(Location::USART1, PBAClock::USART1, nvic::NvicIdx::USART1);
+    USART::new(Location::USART1, pm::PBAClock::USART1, nvic::NvicIdx::USART1);
 pub static mut USART2: USART =
-    USART::new(Location::USART2, PBAClock::USART2, nvic::NvicIdx::USART2);
+    USART::new(Location::USART2, pm::PBAClock::USART2, nvic::NvicIdx::USART2);
 pub static mut USART3: USART =
-    USART::new(Location::USART3, PBAClock::USART3, nvic::NvicIdx::USART3);
+    USART::new(Location::USART3, pm::PBAClock::USART3, nvic::NvicIdx::USART3);
 
+/*
 impl USART {
-    const fn new(location: Location, clock: PBAClock, nvic: nvic::NvicIdx) -> USART {
+    const fn new(location: Location, clock: pm::PBAClock, nvic: nvic::NvicIdx) -> USART {
         USART {
             regs: (BASE_ADDRESS + (location as usize) * SIZE) as *mut Registers,
-            clock: Clock::PBA(clock),
+            clock: pm::Clock::PBA(clock),
             nvic: nvic,
             dma: None,
-            dma_peripheral: DMAPeripheral::USART0_RX, // Set to some default.
+            dma_peripheral: dma::DMAPeripheral::USART0_RX, // Set to some default.
             // This is updated when a
             // real DMA is configured.
             client: None,
         }
     }
 
-    pub fn set_client<C: uart::Client>(&mut self, client: &'static C) {
+    pub fn set_client<C: hil::uart::Client>(&mut self, client: &'static C) {
         self.client = Some(client);
     }
 
-    pub fn set_dma(&mut self, dma: &'static mut DMAChannel, dma_peripheral: DMAPeripheral) {
+    pub fn set_dma(&mut self, dma: &'static mut dma::DMAChannel, dma_peripheral: dma::DMAPeripheral) {
         self.dma = Some(dma);
         self.dma_peripheral = dma_peripheral;
     }
@@ -164,6 +140,7 @@ impl USART {
     }
 
     pub fn handle_interrupt(&mut self) {
+        //XXX: fuck this
         use kernel::hil::uart::UART;
         if self.rx_ready() {
             let regs: &Registers = unsafe { mem::transmute(self.regs) };
@@ -180,25 +157,206 @@ impl USART {
         write_volatile(&mut regs.cr, 1 << 2);
     }
 }
+*/
 
-impl DMAClient for USART {
-    fn xfer_done(&mut self, _pid: usize) {
-        let buffer = match self.dma.as_mut() {
-            Some(dma) => {
-                let buf = dma.abort_xfer();
-                dma.disable();
-                buf
-            }
-            None => None,
+//XXX: Moved. Fix me
+/*
+pub struct USARTParams {
+    // pub client: &'static Shared<hil::uart::Client>,
+    pub baud_rate: u32,
+    pub data_bits: u8,
+    pub parity: Parity,
+    pub mode: Mode,
+}
+
+impl Controller for USART {
+    type Config = USARTParams;
+
+    fn configure(&self, params: USARTParams) {
+        //   self.client = Some(params.client.borrow_mut());
+        let chrl = ((params.data_bits - 1) & 0x3) as u32;
+        let mode =
+            (params.mode as u32) /* mode */
+            | 0 << 4 /*USCLKS*/
+            | chrl << 6 /* Character Length */
+            | (params.parity as u32) << 9 /* Parity */
+            | 0 << 12 /* Number of stop bits = 1 */
+            | 1 << 19 /* Oversample at 8 times baud rate */;
+
+        self.enable_clock();
+        self.set_baud_rate(params.baud_rate);
+        self.set_mode(mode);
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        write_volatile(&mut regs.ttgr, 4);
+        self.enable_rx_interrupts();
+    }
+}
+*/
+
+impl dma::DMAClient for USART {
+    fn xfer_done(&mut self, pid: dma::DMAPeripheral) {
+        // determine if it was an RX or TX transfer
+        if pid == self.dma_rx_peripheral {
+
+            // RX transfer was completed
+
+            // disable RX and RX interrupts
+            self.disable_rx_interrupts();
+            self.disable_rx();
+
+            // get buffer
+            let buffer = match self.rx_dma.as_mut() {
+                Some(rx_dma) => {
+                    let buf = rx_dma.abort_xfer();
+                    rx_dma.disable();
+                    buf
+                }
+                None => None,
+            };
+
+            // alert client
+            self.client.as_ref().map(move |c| {
+                //XXX: how do I get the length of a DMA transaction?
+                //  should this just be the length of the buffer?
+                buffer.map(|buf| c.receive_complete(buf, ?LENOFBUFFER?, hil::uart::Error::CommandComplete));
+            });
+
+        } else if pid == self.dma_tx_peripheral {
+
+            // TX transfer was completed
+
+            // disable TX and TX interrupts
+            self.disable_tx_interrupts();
+            self.disable_tx();
+
+            // get buffer
+            let buffer = match self.tx_dma.as_mut() {
+                Some(tx_dma) => {
+                    let buf = tx_dma.abort_xfer();
+                    tx_dma.disable();
+                    buf
+                }
+                None => None,
+            };
+
+            // alert client
+            self.client.as_ref().map(move |c| {
+                buffer.map(|buf| c.transmit_complete(buf, hil::uart::Error::CommandComplete));
+            });
+        }
+    }
+}
+
+/// Implementation of kernel::hil::UART
+impl hil::uart::UART for USART {
+    fn init (&mut self, params: hil::uart::UARTParams) {
+        // set USART mode register
+        let mode = 0;
+        mode |= 0x1 << 19;  //OVER: oversample at 8 times baud rate
+        mode |= 0x3 <<  6;  //CHRL: 8-bit characters
+        mode |= 0x0 <<  4;  //USCLKS: select CLK_USART
+
+        match params.stop_bits {
+            hil::uart::StopBits::StopBits_1 => mode |= 0x0 << 12,   //NBSTOP: 1 stop bit
+            hil::uart::StopBits::StopBits_2 => mode |= 0x2 << 12,   //NBSTOP: 2 stop bits
         };
-        self.client.as_ref().map(move |c| {
-            buffer.map(|buf| c.write_done(buf));
+
+        match params.parity {
+            hil::uart::Parity::None => mode |= 0x4 << 9,    //PAR: no parity
+            hil::uart::Parity::Odd  => mode |= 0x1 << 9,    //PAR: odd parity
+            hil::uart::Parity::Even => mode |= 0x0 << 9,    //PAR: even parity
+        };
+
+        if (params.hw_flow_control) {
+            mode |= 0x2 << 0;   //MODE: hardware handshaking
+        } else {
+            mode |= 0x0 << 0;   //MODE: normal
+        }
+
+        self.set_mode(mode);
+
+        // set baud rate
+        // NOTE: dependent on oversampling rate
+        //XXX: how do you determine the current clock frequency?
+        let clock_divider = CLK / (8 * params.parity);
+        self.set_baud_rate_divider(clock_divider);
+
+        // set transmitter timeguard
+        //XXX: is this necessary
+        self.set_tx_timeguard(4);
+
+        // stop any TX and RX and clear status
+        self.reset();
+
+        // disable interrupts
+        self.disable_interrupts();
+
+        // enable USART clock
+        self.enable_clock();
+    }
+
+    fn transmit (&self, tx_data: &'static [u8], tx_len: usize) {
+
+        // enable TX and TX interrupts
+        self.enable_tx();
+        self.enable_tx_interrupts();
+
+        // set up dma transfer and start transmission
+        self.tx_dma.as_ref().map(move |dma| {
+            dma.enable();
+            dma.do_xfer(self.tx_dma_peripheral, tx_data, tx_len);
+        });
+    }
+
+    fn receive_buffer (&self, rx_buffer: &'static mut [u8]) {
+
+        // enable RX and RX interrupts
+        self.enable_rx();
+        self.enable_rx_interrupts();
+
+        // set up dma transfer and start reception
+        self.rx_dma.as_ref().map(move |dma| {
+            dma.enable();
+            dma.do_xfer(self.rx_dma_peripheral, rx_buffer, rx_buffer.len());
+        });
+    }
+
+    fn receive_until_finished (&self, rx_buffer: &'static mut [u8], timeout: u8) {
+
+        // enable receive timeout
+        self.enable_rx_timeout(timeout);
+
+        // enable RX and RX interrupts
+        self.enable_rx();
+        self.enable_rx_interrupts();
+
+        // set up dma transfer and start reception
+        self.rx_dma.as_ref().map(move |dma| {
+            dma.enable();
+            dma.do_xfer(self.rx_dma_peripheral, rx_buffer, rx_buffer.len());
+        });
+    }
+
+    fn receive_until_terminator (&self, rx_buffer: &'static mut [u8], terminator: u8) {
+
+        // enable receive terminator
+        self.enable_receive_terminator(terminator);
+
+        // enable RX and RX interrupts
+        self.enable_rx();
+        self.enable_rx_interrupts();
+
+        // set up dma transfer and start reception
+        self.rx_dma.as_ref().map(move |dma| {
+            dma.enable();
+            dma.do_xfer(self.rx_dma_peripheral, rx_buffer, rx_buffer.len());
         });
     }
 }
 
-impl uart::UART for USART {
-    fn init(&mut self, params: uart::UARTParams) {
+/*
+impl hil::uart::UART for USART {
+    fn init(&mut self, params: hil::uart::UARTParams) {
         let chrl = ((params.data_bits - 1) & 0x3) as u32;
         let mode =
             (params.mode as u32) /* mode */
@@ -265,7 +423,9 @@ impl uart::UART for USART {
         write_volatile(&mut regs.cr, 1 << 7);
     }
 }
+*/
 
+// Register interrupt handlers
 interrupt_handler!(usart0_handler, USART0);
 interrupt_handler!(usart1_handler, USART1);
 interrupt_handler!(usart2_handler, USART2);
