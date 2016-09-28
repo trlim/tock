@@ -68,6 +68,56 @@ pub static mut USART2: USART =
 pub static mut USART3: USART =
     USART::new(Location::USART3, pm::PBAClock::USART3, nvic::NvicIdx::USART3);
 
+impl USART {
+    const fn new(location: Location, clock: pm::PBAClock, nvic: nvic::NvicIdx) -> USART {
+        USART {
+            regs: (BASE_ADDRESS + (location as usize) * SIZE) as *mut Registers,
+            clock: pm::Clock::PBA(clock),
+            nvic: nvic,
+
+            // these get defined later by `chip.rs`
+            rx_dma: None,
+            rx_dma_peripheral: dma::DMAPeripheral::USART0_RX, // Set to some default
+            tx_dma: None,
+            tx_dma_peripheral: dma::DMAPeripheral::USART0_TX, // Set to some default
+
+            // this gets defined later by `main.rs`
+            client: None,
+        }
+    }
+
+    pub fn set_client<C: hil::uart::Client>(&mut self, client: &'static C) {
+        self.client = Some(client);
+    }
+
+    pub fn set_dma(&mut self,
+                   rx_dma: &'static mut dma::DMAChannel, rx_dma_peripheral: dma::DMAPeripheral,
+                   tx_dma: &'static mut dma::DMAChannel, tx_dma_peripheral: dma::DMAPeripheral) {
+        self.rx_dma = Some(rx_dma);
+        self.rx_dma_peripheral = rx_dma_peripheral;
+        self.tx_dma = Some(tx_dma);
+        self.tx_dma_peripheral = tx_dma_peripheral;
+    }
+
+    fn enable_clock(&self) {
+        unsafe {
+            pm::enable_clock(self.clock);
+        }
+    }
+
+    fn enable_nvic(&self) {
+        unsafe {
+            nvic::enable(self.nvic);
+        }
+    }
+
+    fn disable_nvic(&self) {
+        unsafe {
+            nvic::disable(self.nvic);
+        }
+    }
+}
+
 /*
 impl USART {
     const fn new(location: Location, clock: pm::PBAClock, nvic: nvic::NvicIdx) -> USART {
@@ -309,6 +359,8 @@ impl hil::uart::UART for USART {
     }
 
     fn receive_buffer (&self, rx_buffer: &'static mut [u8]) {
+        //XXX: handle repeat calls of receive before finished
+        //  need to disable timeout and terminator...
 
         // enable RX and RX interrupts
         self.enable_rx();
@@ -322,6 +374,7 @@ impl hil::uart::UART for USART {
     }
 
     fn receive_until_finished (&self, rx_buffer: &'static mut [u8], timeout: u8) {
+        //XXX: handle repeat calls of receive before finished
 
         // enable receive timeout
         self.enable_rx_timeout(timeout);
@@ -338,6 +391,7 @@ impl hil::uart::UART for USART {
     }
 
     fn receive_until_terminator (&self, rx_buffer: &'static mut [u8], terminator: u8) {
+        //XXX: handle repeat calls of receive before finished
 
         // enable receive terminator
         self.enable_receive_terminator(terminator);
