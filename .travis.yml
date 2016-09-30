@@ -28,6 +28,8 @@ before_install:
 script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then
       find -path ./extern -prune -o -name '*.rs' -exec rustfmt --write-mode=diff {} +; fi
+  - ~/gcc-arm-none-eabi-5_4-2016q3/bin/arm-none-eabi-gcc --version
+  - arm-none-eabi-gcc --version
   - make -C boards/storm
   - make -C boards/nrf51dk
   - make -C userland/libtock TOCK_ARCH=cortex-m4
