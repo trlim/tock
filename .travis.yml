@@ -9,8 +9,11 @@ os:
 #rust:
 #  - nightly-2016-07-29
 
+    #- curl -sL https://static.rust-lang.org/rustup.sh -o ~/rustup.sh
+    #curl https://sh.rustup.rs -sSf | sh
+
 before_install:
-  - curl -sL https://static.rust-lang.org/rustup.sh -o ~/rustup.sh
+  - curl -sL https://sh.rustup.rs -o ~/rustup.sh
   - sh ~/rustup.sh --prefix=~/rust --spec=nightly-2016-07-29 -y --disable-sudo
   - rustc --version
   - cargo --version
