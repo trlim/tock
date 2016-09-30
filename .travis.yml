@@ -5,6 +5,11 @@ os:
   - linux
   - osx
 
+cache:
+  cargo: true
+  directories:
+    - ~/gcc-arm-none-eabi-5_4-2016q3
+
 # If you change this, you must also change README and Common.mk
 #rust:
 #  - nightly-2016-07-29
