@@ -6,10 +6,14 @@ os:
   - osx
 
 # If you change this, you must also change README and Common.mk
-rust:
-  - nightly-2016-07-29
+#rust:
+#  - nightly-2016-07-29
 
 before_install:
+  - curl -sL https://static.rust-lang.org/rustup.sh -o ~/rust-installer/rustup.sh
+  - sh ~/rust-installer/rustup.sh --prefix=~/rust --spec=nightly-2016-07-29 -y --disable-sudo
+  - rustc --version
+  - cargo --version
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then wget https://launchpad.net/gcc-arm-embedded/5.0/5-2016-q3-update/+download/gcc-arm-none-eabi-5_4-2016q3-20160926-linux.tar.bz2 && tar -xf gcc-arm-none-eabi-5_4-2016q3-20160926-linux.tar.bz2 && export PATH=$HOME/gcc-arm-none-eabi-5_4-2016q3/bin:$PATH; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo install rustfmt; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew tap px4/px4; fi
