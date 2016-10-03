@@ -49,6 +49,7 @@ use kernel::{Chip, SysTick};
 use kernel::hil::gpio::GPIOPin;
 use nrf51::timer::ALARM1;
 use nrf51::timer::TimerAlarm;
+use kernel::hil::uart::UART;
 
 // The nRF51 DK LEDs (see back of board)
 const LED1_PIN: usize = 21;
@@ -61,6 +62,9 @@ const BUTTON1_PIN: usize = 17;
 const BUTTON2_PIN: usize = 18;
 const BUTTON3_PIN: usize = 19;
 const BUTTON4_PIN: usize = 20;
+
+static mut bytes: [u8; 8] = [0x55, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5A];
+
 
 unsafe fn load_process() -> &'static mut [Option<kernel::process::Process<'static>>] {
     use core::ptr::{read_volatile, write_volatile};
@@ -94,6 +98,22 @@ pub struct Platform {
     console: &'static capsules::console::Console<'static, nrf51::uart::UART>,
 }
 
+struct UClient {
+      val: u8,
+}
+
+static mut UC: UClient = UClient {
+        val: 0
+};
+
+impl kernel::hil::uart::Client for UClient {
+    fn read_done(&self, byte: u8) {}
+    fn write_done(&self, buf: &'static mut[u8]) {
+        unsafe {
+            nrf51::uart::UART0.send_bytes(&mut bytes as &'static mut [u8; 8], bytes.len());
+        }
+    }
+}
 
 impl kernel::Platform for Platform {
     #[inline(never)]
@@ -157,7 +177,22 @@ pub unsafe fn reset_handler() {
                                        &mut capsules::console::WRITE_BUF,
                                        kernel::Container::create()),
         24);
-    nrf51::uart::UART0.set_client(console);
+
+    nrf51::uart::UART0.init(kernel::hil::uart::UARTParams {
+        baud_rate: 115200,
+        data_bits: 8,
+        parity: kernel::hil::uart::Parity::None,
+        mode: kernel::hil::uart::Mode::Normal});
+    nrf51::uart::UART0.enable_tx(); 
+
+    nrf51::uart::UART0.send_byte(0x00);
+    nrf51::uart::UART0.send_byte(0x00);
+    nrf51::uart::UART0.send_byte(0x55);
+    nrf51::uart::UART0.send_byte(0x8f);
+    nrf51::uart::UART0.send_byte(0xAA);
+    nrf51::uart::UART0.send_byte(0x77);
+
+    //nrf51::uart::UART0.set_client(console);
 
     // The timer driver is built on top of hardware timer 1, which is implemented
     // as an HIL Alarm. Timer 0 has some special functionality for the BLE transciever,
@@ -200,11 +235,15 @@ pub unsafe fn reset_handler() {
         },
         12);
 
+    nrf51::uart::UART0.set_client(&UC);
+
     alarm.start();
 
     let mut chip = nrf51::chip::NRF51::new();
     chip.systick().reset();
     chip.systick().enable(true);
+    nrf51::uart::UART0.send_bytes(&mut bytes as &'static mut [u8; 8], 8);
+
     kernel::main(platform, &mut chip, load_process());
 
 }
