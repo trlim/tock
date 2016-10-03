@@ -11,6 +11,8 @@ use nvic;
 use spi;
 use usart;
 
+use pm;
+
 pub struct Sam4l {
     pub mpu: cortexm4::mpu::MPU,
     pub systick: &'static cortexm4::systick::SysTick,
@@ -88,6 +90,10 @@ impl Chip for Sam4l {
                     TWIM1 => i2c::I2C1.handle_interrupt(),
                     TWIM2 => i2c::I2C2.handle_interrupt(),
                     TWIM3 => i2c::I2C3.handle_interrupt(),
+                    TWIS0 => i2c::I2C0.handle_slave_interrupt(),
+                    TWIS1 => i2c::I2C1.handle_slave_interrupt(),
+
+                    SCIF => pm::interr(),
 
                     HFLASHC => flashcalw::flash_controller.handle_interrupt(),
                     // NvicIdx::ADCIFE   => self.adc.handle_interrupt(),

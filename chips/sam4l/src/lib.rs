@@ -113,7 +113,7 @@ pub static INTERRUPT_TABLE: [Option<unsafe extern fn()>; 80] = [
     /* PEVC_OV */       Option::Some(unhandled_interrupt),
     /* AESA */          Option::Some(unhandled_interrupt),
     /* PM */            Option::Some(unhandled_interrupt),
-    /* SCIF */          Option::Some(unhandled_interrupt),
+    /* SCIF */          Option::Some(pm::scif_handler),
     /* FREQM */         Option::Some(unhandled_interrupt),
     /* GPIO0 */         Option::Some(gpio::gpio0_handler),
     /* GPIO1 */         Option::Some(gpio::gpio1_handler),
@@ -152,9 +152,9 @@ pub static INTERRUPT_TABLE: [Option<unsafe extern fn()>; 80] = [
     /* TC11 */          Option::Some(unhandled_interrupt),
     /* TC12 */          Option::Some(unhandled_interrupt),
     /* TWIM0 */         Option::Some(i2c::twim0_handler),
-    /* TWIS0 */         Option::Some(unhandled_interrupt),
+    /* TWIS0 */         Option::Some(i2c::twis0_handler),
     /* TWIM1 */         Option::Some(i2c::twim1_handler),
-    /* TWIS1 */         Option::Some(unhandled_interrupt),
+    /* TWIS1 */         Option::Some(i2c::twis1_handler),
     /* USART0 */        Option::Some(usart::usart0_handler),
     /* USART1 */        Option::Some(usart::usart1_handler),
     /* USART2 */        Option::Some(usart::usart2_handler),
@@ -199,7 +199,10 @@ pub unsafe fn init() {
     }
 
     // Setup the clock to run at 48 MHz
-    pm::configure_48mhz_dfll();
+    // pm::configure_48mhz_dfll();
+    // pm::configure_48mhz_dfll();
+    // pm::configure_48mhz_dfll_crystal();
+    pm::configure_48mhz_dfll_crystal_pll();
 }
 
 unsafe extern "C" fn hard_fault_handler() {

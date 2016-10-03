@@ -1,5 +1,7 @@
 use kernel::common::volatile_cell::VolatileCell;
 
+use nvic;
+
 #[repr(C, packed)]
 struct PmRegisters {
     mcctrl: VolatileCell<u32>,
@@ -330,7 +332,9 @@ pub unsafe fn configure_48mhz_dfll() {
         // unlock
         (*SCIF).unlock.set(0xAA000030);
         // 1464 = 48000000 / 32768
-        (*SCIF).dfll0mul.set(1464);
+        // (*SCIF).dfll0mul.set(1464);
+        // (*SCIF).dfll0mul.set(1610);
+        (*SCIF).dfll0mul.set(1710);
         while (*SCIF).pclksr.get() & (1 << 3) == 0 {}
         // Set SSG value
         // unlock
@@ -375,6 +379,262 @@ pub unsafe fn configure_48mhz_dfll() {
     (*BSCIF).unlock.set(0xAA000028);
     // Write the BSCIF::RC32KTUNE register
     (*BSCIF).rc32ktune.set(0x001d0015);
+}
+
+/// Configure the system clock to use the DFLL with the 16 MHz external crystal.
+pub unsafe fn configure_48mhz_dfll_crystal() {
+    // Enable HCACHE
+    //
+    enable_clock(Clock::HSB(HSBClock::FLASHCALWP));
+    enable_clock(Clock::PBB(PBBClock::HRAMC1));
+    // Enable cache
+    (*FLASHCALW).ctrl.set(0x01);
+
+    // Wait for the cache controller to be enabled.
+    while (*FLASHCALW).sr.get() & (1 << 0) == 0 {}
+
+    // Check to see if the DFLL is already setup.
+    //
+    if (((*SCIF).dfll0conf.get() & 0x03) == 0) || (((*SCIF).pclksr.get() & (1 << 2)) == 0) {
+
+        // Enable the GENCLK_SRC_RC32K
+        //
+        // // Get the original value
+        // let bscif_rc32kcr = (*BSCIF).rc32kcr.get();
+        // // Unlock the BSCIF::RC32KCR register
+        // (*BSCIF).unlock.set(0xAA000024);
+        // // Write the BSCIF::RC32KCR register.
+        // // Enable the generic clock source, the temperature compensation, and the
+        // // 32k output.
+        // (*BSCIF).rc32kcr.set(bscif_rc32kcr | (1 >> 1) | (1 << 2) | (1 << 0));
+        // // Wait for it to be ready, although it feels like this won't do anything
+        // while (*BSCIF).rc32kcr.get() & (1 << 0) == 0 {}
+
+
+
+
+        (*SCIF).unlock.set(0xAA000020);
+        // enable, 557 us startup time, gain level 4, is crystal.
+        // (*SCIF).oscctrl0.set((1 << 16) | (8 << 8) | (4 << 1) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (1 << 8) | (4 << 1) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (1 << 8) | (4 << 1) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (6 << 8) | (1 << 4) | (1 << 0));
+        (*SCIF).oscctrl0.set((1 << 16) | (6 << 8) | (3 << 1) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (6 << 8) | (1 << 4) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (0 << 8) | (4 << 1) | (1 << 0));
+        // Wait for oscillator to be ready
+        while (*SCIF).pclksr.get() & (1 << 0) == 0 {}
+
+
+
+        // Next init closed loop mode.
+        //
+        // Must do a SCIF sync before reading the SCIF register
+        (*SCIF).dfll0sync.set(0x01);
+        // Wait for it to be ready
+        while (*SCIF).pclksr.get() & (1 << 3) == 0 {}
+
+        // Read the current DFLL settings
+        let scif_dfll0conf = (*SCIF).dfll0conf.get();
+
+// (*SCIF).dfll0conf.set(scif_dfll0conf & (!0x01));
+
+
+        // Set the new values
+        //                                        enable     closed loop
+        let scif_dfll0conf_new1 = scif_dfll0conf | (1 << 0) | (1 << 1);
+        let scif_dfll0conf_new2 = scif_dfll0conf_new1 & (!(3 << 16));
+        // frequency range 2 for 48 MHz
+        let scif_dfll0conf_new3 = scif_dfll0conf_new2 | (2 << 16);
+        // Enable the general clock. Yeah getting these fields is complicated.
+        //                 enable     OSC0       no divider
+        let scif_gcctrl0 = (1 << 0) | (3 << 8) | (0 << 1) | (0 << 16);
+        (*SCIF).gcctrl0.set(scif_gcctrl0);
+
+        // Setup DFLL. Must wait after every operation for the ready bit to go high.
+        // First, enable dfll apparently
+        // unlock dfll0conf
+        (*SCIF).unlock.set(0xAA000028);
+        // enable
+        (*SCIF).dfll0conf.set(0x01);
+        while (*SCIF).pclksr.get() & (1 << 3) == 0 {}
+        // Set step values
+        // unlock
+        (*SCIF).unlock.set(0xAA000034);
+        // 4, 4
+        (*SCIF).dfll0step.set((4 << 0) | (4 << 16));
+        while (*SCIF).pclksr.get() & (1 << 3) == 0 {}
+        // Set multiply value
+        // unlock
+        (*SCIF).unlock.set(0xAA000030);
+        // 3 = 48000000 / 16000000
+        // (*SCIF).dfll0mul.set(1464);
+        // (*SCIF).dfll0mul.set(1610);
+        // (*SCIF).dfll0mul.set(8);
+        (*SCIF).dfll0mul.set(2);
+        while (*SCIF).pclksr.get() & (1 << 3) == 0 {}
+        // Set SSG value
+        // unlock
+        (*SCIF).unlock.set(0xAA000038);
+        // just set to zero to disable
+        (*SCIF).dfll0ssg.set(0);
+        while (*SCIF).pclksr.get() & (1 << 3) == 0 {}
+// panic!("ok");
+        // Set actual configuration
+        // unlock
+        (*SCIF).unlock.set(0xAA000028);
+        // we already prepared this value
+        (*SCIF).dfll0conf.set(scif_dfll0conf_new3);
+
+        // Now wait for it to be ready (DFLL0LOCKF)
+        while (*SCIF).pclksr.get() & (1 << 2) == 0 {}
+    }
+
+
+
+    // Since we are running at a fast speed we have to set a clock delay
+    // for flash, as well as enable fast flash mode.
+    //
+    let flashcalw_fcr = (*FLASHCALW).fcr.get();
+    (*FLASHCALW).fcr.set(flashcalw_fcr | (1 << 6));
+
+    // Enable high speed mode for flash
+    let flashcalw_fcmd = (*FLASHCALW).fcmd.get();
+    let flashcalw_fcmd_new1 = flashcalw_fcmd & (!(0x3F << 0));
+    let flashcalw_fcmd_new2 = flashcalw_fcmd_new1 | (0xA5 << 24) | (0x10 << 0);
+    (*FLASHCALW).fcmd.set(flashcalw_fcmd_new2);
+
+    // And wait for the flash to be ready
+    while (*FLASHCALW).fsr.get() & (1 << 0) == 0 {}
+
+    // TODO: run bpm_configure_power_scaling()
+
+    // Choose the main clock
+    //
+    select_main_clock(MainClock::DFLL);
+
+    // // Load magic calibration value for the 32KHz RC oscillator
+    // //
+    // // Unlock the BSCIF::RC32KTUNE register
+    // (*BSCIF).unlock.set(0xAA000028);
+    // // Write the BSCIF::RC32KTUNE register
+    // (*BSCIF).rc32ktune.set(0x001d0015);
+}
+
+/// Configure the system clock to use the DFLL with the 16 MHz external crystal.
+pub unsafe fn configure_48mhz_dfll_crystal_pll() {
+    // Enable HCACHE
+    //
+    enable_clock(Clock::HSB(HSBClock::FLASHCALWP));
+    enable_clock(Clock::PBB(PBBClock::HRAMC1));
+    // Enable cache
+    (*FLASHCALW).ctrl.set(0x01);
+
+    // Wait for the cache controller to be enabled.
+    while (*FLASHCALW).sr.get() & (1 << 0) == 0 {}
+
+
+    let bscif_rc32kcr = (*BSCIF).rc32kcr.get();
+    // Unlock the BSCIF::RC32KCR register
+    (*BSCIF).unlock.set(0xAA000024);
+    // Write the BSCIF::RC32KCR register.
+    // Enable the generic clock source, the temperature compensation, and the
+    // 32k output.
+    // (*BSCIF).rc32kcr.set(bscif_rc32kcr | (1 >> 1) | (1 << 2) | (1 << 0));
+    (*BSCIF).rc32kcr.set(bscif_rc32kcr | (1 >> 1) | (1 << 2));
+    // Wait for it to be ready, although it feels like this won't do anything
+    while (*BSCIF).rc32kcr.get() & (1 << 0) == 0 {}
+
+
+    // // Enable the general clock. Yeah getting these fields is complicated.
+    // //                 enable     OSC0       no divider
+    // let scif_gcctrl0 = (1 << 0) | (3 << 8) | (0 << 1) | (0 << 16);
+    // (*SCIF).gcctrl0.set(scif_gcctrl0);
+
+
+    // Check to see if the PLL is already setup.
+    //
+    if ((*SCIF).pclksr.get() & (1 << 6)) == 0 {
+
+        // Enable the OSC0
+        (*SCIF).unlock.set(0xAA000020);
+        // enable, 557 us startup time, gain level 4, is crystal.
+        // (*SCIF).oscctrl0.set((1 << 16) | (8 << 8) | (4 << 1) | (1 << 0));
+        (*SCIF).oscctrl0.set((1 << 16) | (1 << 8) | (4 << 1) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (1 << 8) | (4 << 1) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (6 << 8) | (1 << 4) | (1 << 0));
+
+        // (*SCIF).oscctrl0.set((1 << 16) | (3 << 8) | (3 << 1) | (1 << 0));
+
+        // (*SCIF).oscctrl0.set((1 << 16) | (6 << 8) | (1 << 4) | (1 << 0));
+        // (*SCIF).oscctrl0.set((1 << 16) | (0 << 8) | (4 << 1) | (1 << 0));
+        // Wait for oscillator to be ready
+        while (*SCIF).pclksr.get() & (1 << 0) == 0 {}
+
+
+
+        // Setup PLL
+        // unlock
+        (*SCIF).unlock.set(0xAA000024);
+        let val = (1 << 4) | (5 << 16) | (1 << 8) | (0x3F << 24) | (0 << 1) | (1 << 5);
+        (*SCIF).pll0.set(0);
+        (*SCIF).pll0.set(val);
+        (*SCIF).pll0.set(val | 0x1);
+
+        // Wait
+        while (*SCIF).pclksr.get() & (1 << 6) == 0 {}
+
+        // (*SCIF).ier.set((1 << 7));
+        // (*SCIF).icr.set(0xffffffff);
+
+    }
+
+
+    // Since we are running at a fast speed we have to set a clock delay
+    // for flash, as well as enable fast flash mode.
+    //
+    let flashcalw_fcr = (*FLASHCALW).fcr.get();
+    (*FLASHCALW).fcr.set(flashcalw_fcr | (1 << 6));
+
+    // Enable high speed mode for flash
+    let flashcalw_fcmd = (*FLASHCALW).fcmd.get();
+    let flashcalw_fcmd_new1 = flashcalw_fcmd & (!(0x3F << 0));
+    let flashcalw_fcmd_new2 = flashcalw_fcmd_new1 | (0xA5 << 24) | (0x10 << 0);
+    (*FLASHCALW).fcmd.set(flashcalw_fcmd_new2);
+
+    // And wait for the flash to be ready
+    while (*FLASHCALW).fsr.get() & (1 << 0) == 0 {}
+
+    // TODO: run bpm_configure_power_scaling()
+
+    // Choose the main clock
+    //
+    // select_main_clock(MainClock::PLL);
+    select_main_clock(MainClock::OSC0);
+
+    // Load magic calibration value for the 32KHz RC oscillator
+    //
+    // Unlock the BSCIF::RC32KTUNE register
+    (*BSCIF).unlock.set(0xAA000028);
+    // Write the BSCIF::RC32KTUNE register
+    (*BSCIF).rc32ktune.set(0x001d0015);
+}
+
+pub unsafe fn interr() {
+    // panic!("INTERRRUPRUPR");
+
+    let k = (*SCIF).pclksr.get();
+    let e = (*SCIF).isr.get();
+    panic!("interrupt pclksr {:x} {:x}", k, e);
+    // panic!("interrupt pclksr");
+}
+
+
+interrupt_handler!(scif_handler, SCIF);
+
+pub unsafe fn test() {
+    let k = (*SCIF).pclksr.get();
+    panic!("k {:x}", k);
 }
 
 macro_rules! mask_clock {
