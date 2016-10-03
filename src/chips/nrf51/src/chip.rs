@@ -9,6 +9,7 @@ use hil::gpio::GPIOPin;
 use peripheral_interrupts::NvicIdx;
 
 const IQ_SIZE: usize = 100;
+#[no_mangle]
 static mut IQ_BUF : [NvicIdx; IQ_SIZE] = [NvicIdx::POWER_CLOCK; IQ_SIZE];
 pub static mut INTERRUPT_QUEUE : Option<RingBuffer<'static, NvicIdx>> = None;
 
@@ -35,8 +36,6 @@ impl main::Chip for NRF51 {
     }
 
     fn service_pending_interrupts(&mut self) {
-        unsafe {gpio::PORT[24].toggle();}
-
         unsafe {
         INTERRUPT_QUEUE.as_mut().unwrap().dequeue().map(|interrupt| {
             match interrupt {
@@ -46,6 +45,7 @@ impl main::Chip for NRF51 {
                 NvicIdx::TIMER1  => timer::ALARM1.handle_interrupt(),
                 NvicIdx::TIMER2  => timer::TIMER2.handle_interrupt(),
                 NvicIdx::UART0  => uart::UART0.handle_interrupt(),
+//                NvicIdx::UART0  => return,
                 _ => {}
             }
             nvic::enable(interrupt);

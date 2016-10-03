@@ -151,6 +151,8 @@ impl UART {
         regs.intenclr.set(1 << 7 as u32);
     }
 
+#[inline(never)]
+#[no_mangle]
     pub fn handle_interrupt(&mut self) {
         nvic::clear_pending(NvicIdx::UART0);
 
@@ -184,10 +186,6 @@ impl UART {
 impl uart::UART for UART {
 
     fn init(&mut self, params: uart::UARTParams) {
-        unsafe {gpio::PORT[23].enable_output();}
-        unsafe {gpio::PORT[24].enable_output();}
-        unsafe {gpio::PORT[23].set();}
-        unsafe {gpio::PORT[24].set();}
         self.configure(params.baud_rate, 8, 9, 10, 11);
     }
 
@@ -263,7 +261,6 @@ static mut counter: u32 = 0;
 pub unsafe extern fn UART0_Handler() {
     use common::Queue;
     counter = counter + 1;
-    unsafe {gpio::PORT[23].toggle();}
     nvic::disable(NvicIdx::UART0);
     chip::INTERRUPT_QUEUE.as_mut().unwrap().enqueue(NvicIdx::UART0);
 }

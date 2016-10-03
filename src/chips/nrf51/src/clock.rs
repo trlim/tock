@@ -132,6 +132,10 @@ impl Clock {
         }
     }
 
+    pub fn high_set_source(&self, src: HighClockSource) {
+        CLK().hfclkstat.set(src as u32);
+    }
+
     pub fn high_freq(&self) -> XtalFreq {
         match CLK().xtalfreq.get() {
             0xff => XtalFreq::F16MHz,

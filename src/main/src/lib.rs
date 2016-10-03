@@ -24,6 +24,7 @@ pub use mem::{AppSlice, AppPtr, Private, Shared};
 pub use platform::{Chip, MPU, Platform, SysTick};
 pub use process::{Process,State};
 
+#[inline(never)]
 pub fn main<P: Platform, C: Chip>(platform: &mut P, chip: &mut C, processes: &'static mut [Option<process::Process<'static>>]) {
     let processes = unsafe {
         process::PROCS = processes;

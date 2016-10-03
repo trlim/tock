@@ -66,7 +66,7 @@ const BUTTON4_PIN: usize = 20;
 
 pub mod systick;
 
-static mut bytes: [u8; 8] = [0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77];
+static mut bytes: [u8; 8] = [0x55, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5A];
 
 unsafe fn load_process() -> &'static mut [Option<main::process::Process<'static>>] {
     use core::intrinsics::{volatile_load,volatile_store};
@@ -100,7 +100,15 @@ pub struct Platform {
     console: &'static drivers::console::Console<'static, nrf51::uart::UART>,
 }
 
-impl hil::uart::Client for Platform {
+struct UClient {
+  val: u8,
+}
+
+static mut UC: UClient = UClient {
+    val: 0
+};
+
+impl hil::uart::Client for UClient {
     fn read_done(&self, byte: u8) {
 
     }
@@ -187,17 +195,17 @@ pub unsafe fn reset_handler() {
                                                 &mut drivers::console::WRITE_BUF, 
                                                 main::Container::create()),
                                                 24);
-    nrf51::uart::UART0.set_client(console);
 
+    // BUG: for some reason UART initializes to half the specified baud
+    // rate. So to run at 115200 we have to specify 230400. Need to track
+    // down and fix. -pal 9/8/16
     nrf51::uart::UART0.init(hil::uart::UARTParams {
-        baud_rate: 115200,
+        baud_rate: 230400,
         data_bits: 8,
         parity: hil::uart::Parity::None,
         mode: hil::uart::Mode::Normal});
-    nrf51::uart::UART0.enable_tx();
+    nrf51::uart::UART0.enable_tx(); 
 
-//        nrf51::uart::UART0.send_byte(0x55);
-//        nrf51::uart::UART0.send_byte(0x8f);
     // The timer driver is built on top of hardware timer 1, which is implemented
     // as an HIL Alarm. Timer 0 has some special functionality for the BLE transciever,
     // so is reserved for that use. This should be rewritten to use the RTC (off the
@@ -220,17 +228,20 @@ pub unsafe fn reset_handler() {
     nrf51::clock::CLOCK.low_stop();
     nrf51::clock::CLOCK.high_stop();
 
+    nrf51::clock::CLOCK.high_set_source(nrf51::clock::HighClockSource::XTAL);
+    nrf51::clock::CLOCK.high_start();
+    while !nrf51::clock::CLOCK.high_started() {}
     nrf51::clock::CLOCK.low_set_source(nrf51::clock::LowClockSource::RC);
     nrf51::clock::CLOCK.low_start();
-    nrf51::clock::CLOCK.high_start();
     while !nrf51::clock::CLOCK.low_started() {}
-    while !nrf51::clock::CLOCK.high_started() {}
 
     static_init!(platform: Platform = Platform {
         gpio: gpio,
         timer: timer,
         console: console,
     }, 12);
+
+    nrf51::uart::UART0.set_client(&UC);
 
     alarm.start();
 
@@ -255,20 +266,44 @@ pub unsafe extern fn rust_begin_unwind(_args: &Arguments,
     use support::nop;
     use hil::gpio::GPIOPin;
 
-    let led0 = &nrf51::gpio::PORT[LED1_PIN];
-    let led1 = &nrf51::gpio::PORT[LED2_PIN];
+    let led1 = &nrf51::gpio::PORT[LED1_PIN];
+    let led2 = &nrf51::gpio::PORT[LED2_PIN];
+    let led3 = &nrf51::gpio::PORT[LED3_PIN];
+    let led4 = &nrf51::gpio::PORT[LED4_PIN];
 
-    led0.enable_output();
+
     led1.enable_output();
+    led2.enable_output();
+    led3.enable_output();
+    led4.enable_output();
+
     loop {
-        for _ in 0..100000 {
-            led0.set();
-            led1.set();
+        for _ in 0..10000 {
+            led1.clear();
+            led2.set();
+            led3.set();
+            led4.set();
             nop();
         }
-        for _ in 0..100000 {
-            led0.clear();
-            led1.clear();
+        for _ in 0..10000 {
+            led1.set();
+            led2.clear();
+            led3.set();
+            led4.set();
+            nop();
+        }
+        for _ in 0..10000 {
+            led1.set();
+            led2.set();
+            led3.set();
+            led4.clear();
+            nop();
+        }
+        for _ in 0..10000 {
+            led1.set();
+            led2.set();
+            led3.clear();
+            led4.set();
             nop();
         }
     }
