@@ -25,13 +25,11 @@ impl Sam4l {
     pub unsafe fn new() -> Sam4l {
         INTERRUPT_QUEUE = Some(RingBuffer::new(&mut IQ_BUF));
 
-        usart::USART2.set_dma(&mut dma::DMAChannels[0], dma::DMAPeripheral::USART2_RX,
-                              &mut dma::DMAChannels[1], dma::DMAPeripheral::USART2_TX);
+        usart::USART2.set_dma(&mut dma::DMAChannels[0], &mut dma::DMAChannels[1]);
         dma::DMAChannels[0].client = Some(&mut usart::USART2);
         dma::DMAChannels[1].client = Some(&mut usart::USART2);
 
-        usart::USART3.set_dma(&mut dma::DMAChannels[2], dma::DMAPeripheral::USART3_RX,
-                              &mut dma::DMAChannels[3], dma::DMAPeripheral::USART3_TX);
+        usart::USART3.set_dma(&mut dma::DMAChannels[2], &mut dma::DMAChannels[3]);
         dma::DMAChannels[2].client = Some(&mut usart::USART3);
         dma::DMAChannels[3].client = Some(&mut usart::USART3);
 

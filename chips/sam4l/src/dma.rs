@@ -66,7 +66,7 @@ pub enum DMAChannelNum {
 /// *_RX means transfer data from peripheral to memory, *_TX means transfer data
 /// from memory to peripheral.
 #[allow(non_camel_case_types)]
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum DMAPeripheral {
     USART0_RX = 0,
     USART1_RX = 1,
@@ -135,7 +135,7 @@ pub struct DMAChannel {
 }
 
 pub trait DMAClient {
-    fn xfer_done(&mut self, pid: DMAPeripheral);
+    fn xfer_done(&self, pid: DMAPeripheral);
 }
 
 impl DMAChannel {
@@ -192,46 +192,8 @@ impl DMAChannel {
     pub fn handle_interrupt(&mut self) {
         let registers: &mut DMARegisters = unsafe { mem::transmute(self.registers) };
         let channel_num: usize = read_volatile(&registers.peripheral_select);
-        let channel: DMAPeripheral = match(channel_num) {
-            (USART0_RX as usize)        => USART0_RX,
-            (USART1_RX as usize)        => USART1_RX,
-            (USART2_RX as usize)        => USART2_RX,
-            (USART3_RX as usize)        => USART3_RX,
-            (SPI_RX as usize)           => SPI_RX,
-            (TWIM0_RX as usize)         => TWIM0_RX,
-            (TWIM1_RX as usize)         => TWIM1_RX,
-            (TWIM2_RX as usize)         => TWIM2_RX,
-            (TWIM3_RX as usize)         => TWIM3_RX,
-            (TWIS0_RX as usize)         => TWIS0_RX,
-            (TWIS1_RX as usize)         => TWIS1_RX,
-            (ADCIFE_RX as usize)        => ADCIFE_RX,
-            (CATB_RX as usize)          => CATB_RX,
-            (IISC_CH0_RX as usize)      => IISC_CH0_RX,
-            (IISC_CH1_RX as usize)      => IISC_CH1_RX,
-            (PARC_RX as usize)          => PARC_RX,
-            (AESA_RX as usize)          => AESA_RX,
-            (USART0_TX as usize)        => USART0_TX,
-            (USART1_TX as usize)        => USART1_TX,
-            (USART2_TX as usize)        => USART2_TX,
-            (USART3_TX as usize)        => USART3_TX,
-            (SPI_TX as usize)           => SPI_TX,
-            (TWIM0_TX as usize)         => TWIM0_TX,
-            (TWIM1_TX as usize)         => TWIM1_TX,
-            (TWIM2_TX as usize)         => TWIM2_TX,
-            (TWIM3_TX as usize)         => TWIM3_TX,
-            (TWIS0_TX as usize)         => TWIS0_TX,
-            (TWIS1_TX as usize)         => TWIS1_TX,
-            (ADCIFE_TX as usize)        => ADCIFE_TX,
-            (CATB_TX as usize)          => CATB_TX,
-            (ABDACB_SDR0_TX as usize)   => ABDACB_SDR0_TX,
-            (ABDACB_SDR1_TX as usize)   => ABDACB_SDR1_TX,
-            (IISC_CH0_TX as usize)      => IISC_CH0_TX,
-            (IISC_CH1_TX as usize)      => IISC_CH1_TX,
-            (DACC_TX as usize)          => DACC_TX,
-            (AESA_TX as usize)          => AESA_TX,
-            (LCDCA_ACMDR_TX as usize)   => LCDCA_ACMDR_TX,
-            (LCDCA_ABMDR_TX as usize)   => LCDCA_ABMDR_TX,
-        };
+        //XXX: this is going to change based on PR #125
+        let channel: DMAPeripheral = unsafe { mem::transmute(channel_num as u8) };
 
         self.client.as_mut().map(|client| {
             client.xfer_done(channel);
