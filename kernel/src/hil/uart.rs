@@ -2,8 +2,8 @@
 
 #[derive(Copy, Clone)]
 pub enum StopBits {
-    StopBits_1 = 0,
-    StopBits_2 = 2,
+    StopBits1 = 0,
+    StopBits2 = 2,
 }
 
 #[derive(Copy, Clone)]
@@ -23,7 +23,7 @@ pub struct UARTParams {
 
 /// The type of error encountered during UART transaction
 #[derive(Copy, Clone)]
-pub struct Error {
+pub enum Error {
     /// Parity error during receive
     ParityError,
 
@@ -49,11 +49,11 @@ pub trait UART {
     /// # Panics
     ///
     /// if UARTParams are invalid for the current chip
-    fn init(&mut self, params: UARTParams);
+    fn init(&self, params: UARTParams);
 
     /// Transmit data
     //XXX: change this to Amit's EitherBuffer
-    fn transmit(&self, tx_data: &'static [u8], tx_len: usize);
+    fn transmit(&self, tx_data: &'static mut [u8], tx_len: usize);
 
     /// Receive data until buffer is full
     fn receive_buffer(&self, rx_buffer: &'static mut [u8]);
@@ -79,6 +79,6 @@ pub trait Client {
     fn transmit_complete(&self, tx_buffer: &'static [u8], error: Error);
 
     /// UART receive complete
-    fn receive_complete(&self, rx_buffer: &'static mut [u8], rx_len: u8, error: Error);
+    fn receive_complete(&self, rx_buffer: &'static mut [u8], rx_len: usize, error: Error);
 }
 
