@@ -5,6 +5,9 @@ use nvic;
 use peripheral_interrupts::NvicIdx;
 use rtc;
 use timer;
+use uart;
+use kernel::hil::gpio::GPIOPin;
+
 
 const IQ_SIZE: usize = 100;
 static mut IQ_BUF: [NvicIdx; IQ_SIZE] = [NvicIdx::POWER_CLOCK; IQ_SIZE];
@@ -34,6 +37,8 @@ impl kernel::Chip for NRF51 {
 
     fn service_pending_interrupts(&mut self) {
         unsafe {
+        unsafe {gpio::PORT[23].toggle();}
+
             INTERRUPT_QUEUE.as_mut().unwrap().dequeue().map(|interrupt| {
                 match interrupt {
                     NvicIdx::RTC1 => rtc::RTC.handle_interrupt(),
@@ -41,6 +46,7 @@ impl kernel::Chip for NRF51 {
                     NvicIdx::TIMER0 => timer::TIMER0.handle_interrupt(),
                     NvicIdx::TIMER1 => timer::ALARM1.handle_interrupt(),
                     NvicIdx::TIMER2 => timer::TIMER2.handle_interrupt(),
+                    NvicIdx::UART0  => uart::UART0.handle_interrupt(),
                     _ => {}
                 }
                 nvic::enable(interrupt);
@@ -49,6 +55,7 @@ impl kernel::Chip for NRF51 {
     }
 
     fn has_pending_interrupts(&self) -> bool {
+        unsafe {gpio::PORT[22].toggle();}
         unsafe { INTERRUPT_QUEUE.as_mut().unwrap().has_elements() }
     }
 }

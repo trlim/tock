@@ -186,8 +186,6 @@ pub unsafe fn reset_handler() {
     nrf51::uart::UART0.enable_tx(); 
 
     nrf51::uart::UART0.send_byte(0x00);
-    nrf51::uart::UART0.send_byte(0x00);
-    nrf51::uart::UART0.send_byte(0x55);
     nrf51::uart::UART0.send_byte(0x8f);
     nrf51::uart::UART0.send_byte(0xAA);
     nrf51::uart::UART0.send_byte(0x77);
@@ -242,10 +240,16 @@ pub unsafe fn reset_handler() {
     let mut chip = nrf51::chip::NRF51::new();
     chip.systick().reset();
     chip.systick().enable(true);
+    nrf51::gpio::PORT[LED2_PIN].enable_output();
+    nrf51::gpio::PORT[LED3_PIN].enable_output();
+    nrf51::gpio::PORT[LED4_PIN].enable_output();
+    nrf51::gpio::PORT[LED1_PIN].set();
+    nrf51::gpio::PORT[LED2_PIN].set();
+    nrf51::gpio::PORT[LED3_PIN].set();
+    nrf51::gpio::PORT[LED4_PIN].set();
     nrf51::uart::UART0.send_bytes(&mut bytes as &'static mut [u8; 8], 8);
-
+    nrf51::gpio::PORT[LED1_PIN].toggle();
     kernel::main(platform, &mut chip, load_process());
-
 }
 
 

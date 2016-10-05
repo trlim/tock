@@ -154,6 +154,7 @@ impl UART {
     pub fn handle_interrupt(&mut self) {
         nvic::clear_pending(NvicIdx::UART0);
 
+//        unsafe {gpio::PORT[24].toggle();}
         let regs : &Registers = unsafe { mem::transmute(self.regs) };
         let rx = regs.event_rxdrdy.get() != 0;
         let tx = regs.event_txdrdy.get() != 0;
@@ -220,7 +221,7 @@ impl uart::UART for UART {
         self.enable_tx_interrupts();
         self.index.set(0);
         self.len.set(real_len);
-        regs.txd.set(bytes[self.index.get()] as u32);
+        regs.txd.set(bytes[0] as u32);
         self.buffer.replace(bytes);
     }
 
@@ -253,13 +254,10 @@ impl uart::UART for UART {
 
 }
 
-static mut counter: u32 = 0;
 #[no_mangle]
 #[allow(non_snake_case)]
 pub unsafe extern fn UART0_Handler() {
     use kernel::common::Queue;
-    counter = counter + 1;
-    unsafe {gpio::PORT[23].toggle();}
     nvic::disable(NvicIdx::UART0);
     chip::INTERRUPT_QUEUE.as_mut().unwrap().enqueue(NvicIdx::UART0);
 }
