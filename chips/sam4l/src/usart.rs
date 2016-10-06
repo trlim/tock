@@ -1,7 +1,7 @@
 use core::mem;
 use dma::{DMAChannel, DMAClient, DMAPeripheral};
 use helpers::*;
-use kernel::hil::{uart, Controller};
+use kernel::hil::{self, uart, Controller};
 use kernel::hil::uart::{Parity, Mode};
 use nvic;
 use pm::{self, Clock, PBAClock};
@@ -44,9 +44,14 @@ pub enum Location {
     USART3,
 }
 
+enum UsartClient<'a> {
+    Uart(&'a uart::Client),
+    SpiMaster(&'a hil::spi::SpiMasterClient),
+}
+
 pub struct USART {
     regs: *mut Registers,
-    client: Option<&'static uart::Client>,
+    client: Option<&'static UsartClient<'static>>,
     clock: Clock,
     nvic: nvic::NvicIdx,
     dma_peripheral: DMAPeripheral,
@@ -107,7 +112,7 @@ impl USART {
         }
     }
 
-    pub fn set_client<C: uart::Client>(&mut self, client: &'static C) {
+    pub fn set_client(&mut self, client: &'static UsartClient) {
         self.client = Some(client);
     }
 
@@ -265,6 +270,121 @@ impl uart::UART for USART {
         write_volatile(&mut regs.cr, 1 << 7);
     }
 }
+
+impl hil::spi::SpiMaster for USART {
+    fn init(&mut self) {
+
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+
+
+        // let chrl = ((params.data_bits - 1) & 0x3) as u32;
+
+
+
+
+
+        self.enable_clock();
+
+        // Set baud rate. Different math for SPI
+        let cd = 16000000 / (2000000);
+        write_volatile(&mut regs.brgr, cd);
+        // self.set_baud_rate(params.baud_rate);
+
+
+        let mode =
+            0xe << 0 /* SPI Master mode */
+            | 0 << 4 /* USCLKS*/
+            | 0x3 << 6 /* Character Length 8 bits */
+            | 0x4 << 9 /* No Parity */;
+        self.set_mode(mode);
+
+        // Disable transmitter timeguard
+        write_volatile(&mut regs.ttgr, 4);
+    }
+
+
+    fn set_client(&self, client: &'static hil::spi::SpiMasterClient) {
+        let k = UsartClient::SpiMaster(client);
+        self.set_client(k);
+        // USART::set_client(self, k);
+    }
+
+    fn is_busy(&self) -> bool {
+        return false;
+    }
+
+    fn read_write_bytes(&self,
+                        mut write_buffer: &'static mut [u8],
+                        mut read_buffer: Option<&'static mut [u8]>,
+                        len: usize)
+                        -> bool {
+
+
+        // enable rx and tx
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        write_volatile(&mut regs.cr, (1 << 4) | (1 << 6));
+
+
+        write_volatile(&mut regs.thr, 0x9);
+
+        return false;
+    }
+    fn write_byte(&self, val: u8) {
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        write_volatile(&mut regs.cr, (1 << 4) | (1 << 6));
+
+
+        write_volatile(&mut regs.thr, 0xa);
+    }
+    fn read_byte(&self) -> u8 {
+        return false;
+    }
+    fn read_write_byte(&self, val: u8) -> u8 {
+        return 0;
+    }
+
+    /// Returns whether this chip select is valid and was
+    /// applied, 0 is always valid.
+    fn set_chip_select(&self, cs: u8) -> bool {
+        return false;
+    }
+    fn clear_chip_select(&self) {}
+    fn get_chip_select(&self) -> u8 {
+        return 0;
+    }
+
+    /// Returns the actual rate set
+    fn set_rate(&self, rate: u32) -> u32 {
+        return 0;
+    }
+    fn get_rate(&self) -> u32 {
+        return 0;
+    }
+    fn set_clock(&self, polarity: hil::spi::ClockPolarity) {}
+    fn get_clock(&self) -> hil::spi::ClockPolarity {
+        return hil::spi::ClockPolarity::IdleLow;
+    }
+    fn set_phase(&self, phase: hil::spi::ClockPhase) {
+
+    }
+    fn get_phase(&self) -> hil::spi::ClockPhase {
+        return hil::spi::ClockPhase::SampleLeading;
+    }
+
+    // These two functions determine what happens to the chip
+    // select line between transfers. If hold_low() is called,
+    // then the chip select line is held low after transfers
+    // complete. If release_low() is called, then the chip select
+    // line is brought high after a transfer completes. A "transfer"
+    // is any of the read/read_write calls. These functions
+    // allow an application to manually control when the
+    // CS line is high or low, such that it can issue multi-byte
+    // requests with single byte operations.
+    fn hold_low(&self) {}
+    fn release_low(&self) {}
+}
+
+
 
 interrupt_handler!(usart0_handler, USART0);
 interrupt_handler!(usart1_handler, USART1);
