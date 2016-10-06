@@ -99,7 +99,7 @@ impl USART {
 
     pub fn enable_rx (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let cr_val = 0x0000 |
+        let cr_val = 0x00000000 |
             (1 << 4); // RXEN
         regs.cr.set(cr_val);
 
@@ -109,7 +109,7 @@ impl USART {
     pub fn enable_tx (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let cr_val = 0x0000 |
+        let cr_val = 0x00000000 |
             (1 << 6); // TXEN
         regs.cr.set(cr_val);
 
@@ -118,7 +118,7 @@ impl USART {
 
     pub fn disable_rx (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let cr_val = 0x0000 |
+        let cr_val = 0x00000000 |
             (1 << 5); // RXDIS
         regs.cr.set(cr_val);
 
@@ -127,7 +127,7 @@ impl USART {
 
     pub fn disable_tx (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let cr_val = 0x0000 |
+        let cr_val = 0x00000000 |
             (1 << 7); // TXDIS
         regs.cr.set(cr_val);
 
@@ -152,7 +152,7 @@ impl USART {
 
     pub fn disable_rx_interrupts (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let idr_val = 0x0000 |
+        let idr_val = 0x00000000 |
             (1 << 12) | // RXBUFF
             (1 <<  8) | // TIMEOUT
             (1 <<  7) | // PARE
@@ -166,7 +166,7 @@ impl USART {
 
     pub fn disable_tx_interrupts (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let idr_val = 0x0000 |
+        let idr_val = 0x00000000 |
             (1 << 9) | // TXEMPTY
             (1 << 1);  // TXREADY
         regs.idr.set(idr_val);
@@ -184,7 +184,7 @@ impl USART {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
 
         // reset status bits, transmitter, and receiver
-        let cr_val = 0x0000 |
+        let cr_val = 0x00000000 |
             (1 << 8) | // RSTSTA
             (1 << 3) | // RSTTX
             (1 <<2);   // RSTRX
@@ -219,25 +219,29 @@ impl USART {
 
     fn set_baud_rate_divider (&self, clock_divider: u16) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let brgr_val: u32 = 0x0000 | clock_divider as u32;
+        let brgr_val: u32 = 0x00000000 | clock_divider as u32;
         regs.brgr.set(brgr_val);
     }
 
     fn set_tx_timeguard (&self, timeguard: u8) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let ttgr_val: u32 = 0x0000 | timeguard as u32;
+        let ttgr_val: u32 = 0x00000000 | timeguard as u32;
         regs.ttgr.set(ttgr_val);
     }
 
     fn enable_rx_timeout (&self, timeout: u8) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let rtor_val: u32 = 0x0000 | timeout as u32;
+        let rtor_val: u32 = 0x00000000 | timeout as u32;
         regs.rtor.set(rtor_val);
+
+        //XXX: also need to enable interrupt
     }
 
     fn disable_rx_timeout (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
         regs.rtor.set(0);
+
+        //XXX: also need to disable interrupt
     }
 
     fn enable_rx_terminator (&self, terminator: u8) {
@@ -251,132 +255,26 @@ impl USART {
         //XXX: what to do here
         panic!("didn't write terminator stuff yet");
     }
-}
 
-/*
-impl USART {
-    const fn new(location: Location, clock: pm::PBAClock, nvic: nvic::NvicIdx) -> USART {
-        USART {
-            regs: (BASE_ADDRESS + (location as usize) * SIZE) as *mut Registers,
-            clock: pm::Clock::PBA(clock),
-            nvic: nvic,
-            dma: None,
-            dma_peripheral: dma::DMAPeripheral::USART0_RX, // Set to some default.
-            // This is updated when a
-            // real DMA is configured.
-            client: None,
+    // for use by panic in io.rs
+    pub fn send_byte (&self, byte: u8) {
+        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
+        let thr_val: u32 = 0x00000000 | byte as u32;
+        regs.thr.set(thr_val);
+    }
+
+    // for use by panic in io.rs
+    pub fn tx_ready (&self) -> bool {
+        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
+        let csr_val: u32 = regs.csr.get();
+        let mut ret_val = false;
+        if (csr_val & (1 << 1)) == (1 << 1) {
+            // tx is ready
+            ret_val = true;
         }
-    }
-
-    pub fn set_client<C: hil::uart::Client>(&mut self, client: &'static C) {
-        self.client = Some(client);
-    }
-
-    pub fn set_dma(&mut self, dma: &'static mut dma::DMAChannel, dma_peripheral: dma::DMAPeripheral) {
-        self.dma = Some(dma);
-        self.dma_peripheral = dma_peripheral;
-    }
-
-    fn set_baud_rate(&self, baud_rate: u32) {
-        let cd = 48000000 / (8 * baud_rate);
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.brgr, cd);
-    }
-
-    fn set_mode(&self, mode: u32) {
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.mr, mode);
-    }
-
-    fn enable_clock(&self) {
-        unsafe {
-            pm::enable_clock(self.clock);
-        }
-    }
-
-    fn enable_nvic(&self) {
-        unsafe {
-            nvic::enable(self.nvic);
-        }
-    }
-
-    fn disable_nvic(&self) {
-        unsafe {
-            nvic::disable(self.nvic);
-        }
-    }
-
-    pub fn enable_rx_interrupts(&self) {
-        self.enable_nvic();
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.ier, 1 as u32);
-    }
-
-    pub fn enable_tx_interrupts(&mut self) {
-        self.enable_nvic();
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.ier, 2 as u32);
-    }
-
-    pub fn disable_rx_interrupts(&mut self) {
-        self.disable_nvic();
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.idr, 1 as u32);
-    }
-
-    pub fn handle_interrupt(&mut self) {
-        //XXX: fuck this
-        use kernel::hil::uart::UART;
-        if self.rx_ready() {
-            let regs: &Registers = unsafe { mem::transmute(self.regs) };
-            let c = read_volatile(&regs.rhr) as u8;
-            match self.client {
-                Some(ref client) => client.read_done(c),
-                None => {}
-            }
-        }
-    }
-
-    pub fn reset_rx(&mut self) {
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.cr, 1 << 2);
+        ret_val
     }
 }
-*/
-
-//XXX: Moved. Delete me altogether
-/*
-pub struct USARTParams {
-    // pub client: &'static Shared<hil::uart::Client>,
-    pub baud_rate: u32,
-    pub data_bits: u8,
-    pub parity: Parity,
-    pub mode: Mode,
-}
-
-impl Controller for USART {
-    type Config = USARTParams;
-
-    fn configure(&self, params: USARTParams) {
-        //   self.client = Some(params.client.borrow_mut());
-        let chrl = ((params.data_bits - 1) & 0x3) as u32;
-        let mode =
-            (params.mode as u32) /* mode */
-            | 0 << 4 /*USCLKS*/
-            | chrl << 6 /* Character Length */
-            | (params.parity as u32) << 9 /* Parity */
-            | 0 << 12 /* Number of stop bits = 1 */
-            | 1 << 19 /* Oversample at 8 times baud rate */;
-
-        self.enable_clock();
-        self.set_baud_rate(params.baud_rate);
-        self.set_mode(mode);
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.ttgr, 4);
-        self.enable_rx_interrupts();
-    }
-}
-*/
 
 impl dma::DMAClient for USART {
     fn xfer_done (&self, pid: dma::DMAPeripheral) {
@@ -386,8 +284,9 @@ impl dma::DMAClient for USART {
             // RX transfer was completed
 
             // disable RX and RX interrupts
-            self.disable_rx_interrupts();
-            self.disable_rx();
+            //XXX: need to do this when the interrupt comes in based on state
+            //self.disable_rx_interrupts();
+            //self.disable_rx();
 
             // get buffer
             let buffer = self.rx_dma.map_or(None, |rx_dma| {
@@ -399,7 +298,7 @@ impl dma::DMAClient for USART {
             // alert client
             self.client.map(|c| {
                 //XXX: how do I get the length of a DMA transaction?
-                //  should this just be the length of the buffer?
+                //NEED TO FIGURE THIS OUT
                 buffer.map(|buf| {
                     let length = buf.len();
                     c.receive_complete(buf, length, hil::uart::Error::CommandComplete);
@@ -410,9 +309,13 @@ impl dma::DMAClient for USART {
 
             // TX transfer was completed
 
+            //use kernel::hil::uart::UART;
+            //self.panic_csr();
+
             // disable TX and TX interrupts
-            self.disable_tx_interrupts();
-            self.disable_tx();
+            //XXX: need to do this when the interrupt comes in based on state
+            //self.disable_tx_interrupts();
+            //self.disable_tx();
 
             // get buffer
             let buffer = self.tx_dma.map_or(None, |tx_dma| {
@@ -432,15 +335,22 @@ impl dma::DMAClient for USART {
 /// Implementation of kernel::hil::UART
 impl hil::uart::UART for USART {
     fn init (&self, params: hil::uart::UARTParams) {
+        // enable USART clock
+        //XXX: should we instead only enable clock when in use?
+        self.enable_clock();
+
+        // stop any TX and RX and clear status
+        self.reset();
+
         // set USART mode register
-        let mut mode = 0;
+        let mut mode = 0x00000000;
         mode |= 0x1 << 19;  //OVER: oversample at 8 times baud rate
         mode |= 0x3 <<  6;  //CHRL: 8-bit characters
         mode |= 0x0 <<  4;  //USCLKS: select CLK_USART
 
         match params.stop_bits {
-            hil::uart::StopBits::StopBits1 => mode |= 0x0 << 12,   //NBSTOP: 1 stop bit
-            hil::uart::StopBits::StopBits2 => mode |= 0x2 << 12,   //NBSTOP: 2 stop bits
+            hil::uart::StopBits::One => mode |= 0x0 << 12,   //NBSTOP: 1 stop bit
+            hil::uart::StopBits::Two => mode |= 0x2 << 12,   //NBSTOP: 2 stop bits
         };
 
         match params.parity {
@@ -460,22 +370,17 @@ impl hil::uart::UART for USART {
         // set baud rate
         // NOTE: dependent on oversampling rate
         //XXX: how do you determine the current clock frequency?
-        let clock_divider = 48000000 / (8 * params.baud_rate);
+        let clock_divider = 16000000 / (8 * params.baud_rate);
         self.set_baud_rate_divider(clock_divider as u16);
 
         // set transmitter timeguard
         //XXX: is this necessary
         self.set_tx_timeguard(4);
 
-        // stop any TX and RX and clear status
-        self.reset();
-
         // disable interrupts
         self.disable_interrupts();
 
-        // enable USART clock
-        //XXX: should we instead only enable clock when in use?
-        self.enable_clock();
+        self.enable_tx();
     }
 
     fn transmit (&self, tx_data: &'static mut [u8], tx_len: usize) {
@@ -484,6 +389,7 @@ impl hil::uart::UART for USART {
         self.abort_tx();
 
         // enable TX
+        //XXX: need to set state here too
         self.enable_tx();
 
         // set up dma transfer and start transmission
@@ -493,18 +399,25 @@ impl hil::uart::UART for USART {
         });
     }
 
-    fn receive_buffer (&self, rx_buffer: &'static mut [u8]) {
+    fn receive (&self, rx_buffer: &'static mut [u8], rx_len: usize) {
 
         // quit current reception if any
         self.abort_rx();
 
+        // truncate rx_len if necessary
+        let mut length = rx_len;
+        if rx_len > rx_buffer.len() {
+            length = rx_buffer.len();
+        }
+
         // enable RX
+        //XXX: need to set state here too
+        //self.reset();
         self.enable_rx();
 
         // set up dma transfer and start reception
         self.rx_dma.map(move |dma| {
             dma.enable();
-            let length = rx_buffer.len();
             dma.do_xfer(self.rx_dma_peripheral, rx_buffer, length);
         });
     }
@@ -546,78 +459,21 @@ impl hil::uart::UART for USART {
             dma.do_xfer(self.rx_dma_peripheral, rx_buffer, length);
         });
     }
-}
 
-/*
-impl hil::uart::UART for USART {
-    fn init(&mut self, params: hil::uart::UARTParams) {
-        let chrl = ((params.data_bits - 1) & 0x3) as u32;
-        let mode =
-            (params.mode as u32) /* mode */
-            | 0 << 4 /*USCLKS*/
-            | chrl << 6 /* Character Length */
-            | (params.parity as u32) << 9 /* Parity */
-            | 0 << 12 /* Number of stop bits = 1 */
-            | 1 << 19 /* Oversample at 8 times baud rate */;
+    //XXX: Testing, remove
+    fn panic_csr (&self) {
+        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
+        let init_csr_val: u32 = regs.csr.get();
 
-        self.enable_clock();
-        self.set_baud_rate(params.baud_rate);
-        self.set_mode(mode);
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.ttgr, 4);
-    }
+        for x in 0..100000 {
+            regs.csr.get();
+        }
 
-    fn send_byte(&self, byte: u8) {
-        while !self.tx_ready() {}
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.thr, byte as u32);
-    }
+        let final_csr_val: u32 = regs.csr.get();
 
-    fn send_bytes(&self, bytes: &'static mut [u8], len: usize) {
-        self.dma.as_ref().map(move |dma| {
-            dma.enable();
-            dma.do_xfer(self.dma_peripheral, bytes, len);
-        });
-    }
-
-    fn rx_ready(&self) -> bool {
-        let regs: &Registers = unsafe { mem::transmute(self.regs) };
-        read_volatile(&regs.csr) & 0b1 != 0
-    }
-
-    fn tx_ready(&self) -> bool {
-        let regs: &Registers = unsafe { mem::transmute(self.regs) };
-        read_volatile(&regs.csr) & 0b10 != 0
-    }
-
-
-    fn read_byte(&self) -> u8 {
-        while !self.rx_ready() {}
-        let regs: &Registers = unsafe { mem::transmute(self.regs) };
-        read_volatile(&regs.rhr) as u8
-    }
-
-    fn enable_rx(&self) {
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.cr, 1 << 4);
-    }
-
-    fn disable_rx(&mut self) {
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.cr, 1 << 5);
-    }
-
-    fn enable_tx(&self) {
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.cr, 1 << 6);
-    }
-
-    fn disable_tx(&mut self) {
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.cr, 1 << 7);
+        panic!("CSR: 0x{:x} to 0x{:x}", init_csr_val, final_csr_val);
     }
 }
-*/
 
 // Register interrupt handlers
 interrupt_handler!(usart0_handler, USART0);

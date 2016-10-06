@@ -2,8 +2,8 @@
 
 #[derive(Copy, Clone)]
 pub enum StopBits {
-    StopBits1 = 0,
-    StopBits2 = 2,
+    One = 0,
+    Two = 2,
 }
 
 #[derive(Copy, Clone)]
@@ -56,7 +56,7 @@ pub trait UART {
     fn transmit(&self, tx_data: &'static mut [u8], tx_len: usize);
 
     /// Receive data until buffer is full
-    fn receive_buffer(&self, rx_buffer: &'static mut [u8]);
+    fn receive(&self, rx_buffer: &'static mut [u8], rx_len: usize);
 
     /// Receive data until `timeout` bit periods have passed since the last byte
     /// or buffer is full. Does not timeout until at least one byte has been
@@ -70,13 +70,16 @@ pub trait UART {
     ///
     /// * `terminator` - data byte terminating a reception
     fn receive_until_terminator(&self, rx_buffer: &'static mut [u8], terminator: u8);
+
+    //XXX: testing, remove
+    fn panic_csr(&self);
 }
 
 
 /// Implement Client to receive callbacks from UART
 pub trait Client {
     /// UART transmit complete
-    fn transmit_complete(&self, tx_buffer: &'static [u8], error: Error);
+    fn transmit_complete(&self, tx_buffer: &'static mut [u8], error: Error);
 
     /// UART receive complete
     fn receive_complete(&self, rx_buffer: &'static mut [u8], rx_len: usize, error: Error);
