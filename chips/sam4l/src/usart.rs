@@ -1,4 +1,6 @@
 use core::mem;
+
+use kernel::common::take_cell::TakeCell;
 use dma::{DMAChannel, DMAClient, DMAPeripheral};
 use helpers::*;
 use kernel::hil::{self, uart, Controller};
@@ -51,7 +53,7 @@ enum UsartClient<'a> {
 
 pub struct USART {
     regs: *mut Registers,
-    client: Option<&'static UsartClient<'static>>,
+    client: TakeCell<UsartClient<'static>>,
     clock: Clock,
     nvic: nvic::NvicIdx,
     dma_peripheral: DMAPeripheral,
@@ -108,12 +110,18 @@ impl USART {
             dma_peripheral: DMAPeripheral::USART0_RX, // Set to some default.
             // This is updated when a
             // real DMA is configured.
-            client: None,
+            client: TakeCell::empty(),
         }
     }
 
-    pub fn set_client(&mut self, client: &'static UsartClient) {
-        self.client = Some(client);
+    fn set_internal_client(&self, client: UsartClient<'static>) {
+        self.client.replace(client);
+    }
+
+    pub fn set_uart_client(&self, client: &'static hil::uart::Client) {
+        let k = UsartClient::Uart(client);
+        self.set_internal_client(k);
+        // USART::set_client(self, k);
     }
 
     pub fn set_dma(&mut self, dma: &'static mut DMAChannel, dma_peripheral: DMAPeripheral) {
@@ -173,10 +181,18 @@ impl USART {
         if self.rx_ready() {
             let regs: &Registers = unsafe { mem::transmute(self.regs) };
             let c = read_volatile(&regs.rhr) as u8;
-            match self.client {
-                Some(ref client) => client.read_done(c),
-                None => {}
-            }
+            // match self.client {
+            self.client.map(|usartclient| {
+                // Some(client) => {
+                    match usartclient {
+                        &mut UsartClient::Uart(client) => client.read_done(c),
+                        &mut UsartClient::SpiMaster(client) => {},
+                    }
+                // }
+
+                    // client.read_done(c),
+                // None => {}
+            });
         }
     }
 
@@ -196,8 +212,16 @@ impl DMAClient for USART {
             }
             None => None,
         };
-        self.client.as_ref().map(move |c| {
-            buffer.map(|buf| c.write_done(buf));
+        self.client.map(|usartclient| {
+        // self.client.map(move |client| {
+        // self.client.as_ref().map(move |client| {
+            buffer.map(|buf| {
+                match usartclient {
+                    &mut UsartClient::Uart(client) => client.write_done(buf),
+                    &mut UsartClient::SpiMaster(client) => {},
+                }
+                // c.write_done(buf)
+            });
         });
     }
 }
@@ -272,7 +296,7 @@ impl uart::UART for USART {
 }
 
 impl hil::spi::SpiMaster for USART {
-    fn init(&mut self) {
+    fn init(&self) {
 
         let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
 
@@ -295,7 +319,8 @@ impl hil::spi::SpiMaster for USART {
             0xe << 0 /* SPI Master mode */
             | 0 << 4 /* USCLKS*/
             | 0x3 << 6 /* Character Length 8 bits */
-            | 0x4 << 9 /* No Parity */;
+            | 0x4 << 9 /* No Parity */
+            | 1 << 18 /* USART drives the clock pin */;
         self.set_mode(mode);
 
         // Disable transmitter timeguard
@@ -305,7 +330,7 @@ impl hil::spi::SpiMaster for USART {
 
     fn set_client(&self, client: &'static hil::spi::SpiMasterClient) {
         let k = UsartClient::SpiMaster(client);
-        self.set_client(k);
+        self.set_internal_client(k);
         // USART::set_client(self, k);
     }
 
@@ -337,7 +362,15 @@ impl hil::spi::SpiMaster for USART {
         write_volatile(&mut regs.thr, 0xa);
     }
     fn read_byte(&self) -> u8 {
-        return false;
+        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        let a = read_volatile(&mut regs.csr);
+
+        panic!("csr {:x}", a);
+
+
+
+
+        return 0;
     }
     fn read_write_byte(&self, val: u8) -> u8 {
         return 0;
