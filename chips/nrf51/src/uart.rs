@@ -202,6 +202,17 @@ impl uart::UART for UART {
         let regs : &mut Registers = unsafe { mem::transmute(self.regs) };
         regs.event_txdrdy.set(0);
         regs.txd.set(byte as u32);
+        /* let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
+        unsafe {
+            ptr::write_volatile(&mut regs.starttx, 1 as u32);
+        }
+        unsafe {
+            ptr::write_volatile(&mut regs.txdrdy, 0 as u32);
+        }
+        unsafe {
+            ptr::write_volatile(&mut regs.txd, byte as u32);
+        }
+        */
         while !self.tx_ready() {}
     }
 
