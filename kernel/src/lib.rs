@@ -10,7 +10,6 @@ pub mod mem;
 pub mod process;
 pub mod hil;
 use hil::gpio;
-use nrf51::gpio;
 
 pub mod support;
 
