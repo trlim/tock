@@ -2,6 +2,7 @@
 
 // rust language modules
 use core::mem;
+use core::cell::Cell;
 // local modules
 use nvic;
 use dma;
@@ -48,14 +49,34 @@ const USART_BASE_ADDRS: [*mut USARTRegisters; 4] = [
     0x40030000 as *mut USARTRegisters,
 ];
 
+#[derive(Copy, Clone, PartialEq)]
+pub enum USARTStateRX {
+    Idle,
+    DMA_Receiving,
+}
+
+#[derive(Copy, Clone, PartialEq)]
+pub enum USARTStateTX {
+    Idle,
+    DMA_Transmitting,
+    Transfer_Completing, // DMA finished, but not all bytes sent
+}
+
 pub struct USART {
     registers: *mut USARTRegisters,
     clock: pm::Clock,
     nvic: nvic::NvicIdx,
+
+    usart_tx_state: Cell<USARTStateTX>,
+    usart_rx_state: Cell<USARTStateRX>,
+
     rx_dma: TakeCell<&'static dma::DMAChannel>,
     rx_dma_peripheral: dma::DMAPeripheral,
+    rx_len: Cell<usize>,
     tx_dma: TakeCell<&'static dma::DMAChannel>,
     tx_dma_peripheral: dma::DMAPeripheral,
+    tx_len: Cell<usize>,
+
     client: TakeCell<&'static hil::uart::Client>,
 }
 
@@ -77,11 +98,16 @@ impl USART {
             clock: pm::Clock::PBA(clock),
             nvic: nvic,
 
+            usart_rx_state: Cell::new(USARTStateRX::Idle),
+            usart_tx_state: Cell::new(USARTStateTX::Idle),
+
             // these get defined later by `chip.rs`
             rx_dma: TakeCell::empty(),
             rx_dma_peripheral: rx_dma_peripheral,
+            rx_len: Cell::new(0),
             tx_dma: TakeCell::empty(),
             tx_dma_peripheral: tx_dma_peripheral,
+            tx_len: Cell::new(0),
 
             // this gets defined later by `main.rs`
             client: TakeCell::empty(),
@@ -102,8 +128,6 @@ impl USART {
         let cr_val = 0x00000000 |
             (1 << 4); // RXEN
         regs.cr.set(cr_val);
-
-        //XXX: enable/disable clock when necessary
     }
 
     pub fn enable_tx (&self) {
@@ -112,8 +136,6 @@ impl USART {
         let cr_val = 0x00000000 |
             (1 << 6); // TXEN
         regs.cr.set(cr_val);
-
-        //XXX: enable/disable clock when necessary
     }
 
     pub fn disable_rx (&self) {
@@ -122,7 +144,7 @@ impl USART {
             (1 << 5); // RXDIS
         regs.cr.set(cr_val);
 
-        //XXX: enable/disable clock when necessary
+        self.usart_rx_state.set(USARTStateRX::Idle);
     }
 
     pub fn disable_tx (&self) {
@@ -131,23 +153,75 @@ impl USART {
             (1 << 7); // TXDIS
         regs.cr.set(cr_val);
 
-        //XXX: enable/disable clock when necessary
+        self.usart_tx_state.set(USARTStateTX::Idle);
     }
 
-    pub fn abort_rx (&self) {
-        //XXX: What's the best way to do this? Don't want a ton of waste
+    pub fn abort_rx (&self, error: hil::uart::Error) {
+        if self.usart_rx_state.get() == USARTStateRX::DMA_Receiving {
+            self.disable_rx();
+            self.disable_rx_interrupts();
+
+            // get buffer
+            let mut length = 0;
+            let buffer = self.rx_dma.map_or(None, |rx_dma| {
+                length = self.rx_len.get() - rx_dma.transfer_counter();
+                let buf = rx_dma.abort_xfer();
+                rx_dma.disable();
+                buf
+            });
+
+            // alert client
+            self.client.map(|c| {
+                buffer.map(|buf| {
+                    c.receive_complete(buf, length, error);
+                });
+            });
+            self.rx_len.set(0);
+            self.usart_rx_state.set(USARTStateRX::Idle);
+        }
     }
 
-    pub fn abort_tx (&self) {
-        //XXX: What's the best way to do this? Don't want a ton of waste
+    pub fn abort_tx (&self, error: hil::uart::Error) {
+        if self.usart_tx_state.get() == USARTStateTX::DMA_Transmitting {
+            self.disable_tx();
+            self.disable_tx_interrupts();
+
+            // get buffer
+            let mut length = 0;
+            let buffer = self.tx_dma.map_or(None, |tx_dma| {
+                length = self.tx_len.get() - tx_dma.transfer_counter();
+                let buf = tx_dma.abort_xfer();
+                tx_dma.disable();
+                buf
+            });
+
+            // alert client
+            self.client.map(|c| {
+                buffer.map(|buf| {
+                    c.receive_complete(buf, length, error);
+                });
+            });
+            self.tx_len.set(0);
+            self.usart_tx_state.set(USARTStateTX::Idle);
+        }
     }
 
-    pub fn enable_rx_interrupts (&self) {
+    pub fn enable_rx_error_interrupts (&self) {
         self.enable_nvic();
+        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
+        let ier_val = 0x00000000 |
+            (1 <<  7) | // PARE
+            (1 <<  6) | // FRAME
+            (1 <<  5);  // OVRE
+        regs.ier.set(ier_val);
     }
 
-    pub fn enable_tx_interrupts (&self) {
+    pub fn enable_tx_complete_interrupt (&self) {
         self.enable_nvic();
+        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
+        let ier_val = 0x00000000 |
+            (1 << 9);  // TXRDY
+        regs.ier.set(ier_val);
     }
 
     pub fn disable_rx_interrupts (&self) {
@@ -171,7 +245,7 @@ impl USART {
             (1 << 1);  // TXREADY
         regs.idr.set(idr_val);
 
-        // disable nvic if no interrupts are enabled
+        //XXX: disable nvic if no interrupts are enabled
     }
 
     pub fn disable_interrupts (&self) {
@@ -189,9 +263,51 @@ impl USART {
             (1 << 3) | // RSTTX
             (1 <<2);   // RSTRX
         regs.cr.set(cr_val);
+
+        self.abort_rx(hil::uart::Error::ResetError);
+        self.abort_tx(hil::uart::Error::ResetError);
+
+        self.usart_rx_state.set(USARTStateRX::Idle);
+        self.usart_tx_state.set(USARTStateTX::Idle);
     }
 
     pub fn handle_interrupt (&self) {
+        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
+        let status = regs.csr.get();
+
+        if status & (1 << 8) != 0 { // TIMEOUT
+            self.disable_rx_timeout();
+            self.abort_rx(hil::uart::Error::CommandComplete);
+
+        } else if status & (1 << 7) != 0 { // PARE
+            self.abort_rx(hil::uart::Error::ParityError);
+
+        } else if status & (1 << 6) != 0 { // FRAME
+            self.abort_rx(hil::uart::Error::FramingError);
+
+        } else if status & (1 << 5) != 0 { // OVRE
+            self.abort_rx(hil::uart::Error::OverrunError);
+
+        } else if status & (1 << 9) != 0 { // TXEMPTY
+            if self.usart_tx_state.get() == USARTStateTX::Transfer_Completing {
+                // transfer complete and no new DMA started. Disable tx
+                self.usart_tx_state.set(USARTStateTX::Idle);
+                self.disable_tx();
+                self.disable_tx_interrupts();
+            } else {
+                panic!("got bad txempty: TX_State: {:x}", self.usart_tx_state.get() as u32);
+            }
+
+        } else {
+            //XXX: I end up getting interrupt calls with no bits set in the status register
+            //  not sure why. Ignoring them for now
+            if status != 0 {
+                panic!("unhandled interrupt. Status: 0x{:x}, IMR: 0x{:x}", status, regs.imr.get());
+            }
+        }
+
+        // reset status registers
+        regs.cr.set(1 << 8); // RSTSTA
     }
 
     fn enable_clock (&self) {
@@ -234,25 +350,31 @@ impl USART {
         let rtor_val: u32 = 0x00000000 | timeout as u32;
         regs.rtor.set(rtor_val);
 
-        //XXX: also need to enable interrupt
+        // enable timeout interrupt
+        regs.ier.set((1 << 8)); // TIMEOUT
+        self.enable_nvic();
+
+        // start timeout
+        regs.cr.set((1 << 11)); // STTTO
     }
 
     fn disable_rx_timeout (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
         regs.rtor.set(0);
 
-        //XXX: also need to disable interrupt
+        // enable timeout interrupt
+        regs.idr.set((1 << 8)); // TIMEOUT
     }
 
     fn enable_rx_terminator (&self, terminator: u8) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        //XXX: what to do here
+        //XXX: implement me
         panic!("didn't write terminator stuff yet");
     }
 
     fn disable_rx_terminator (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        //XXX: what to do here
+        //XXX: implement me
         panic!("didn't write terminator stuff yet");
     }
 
@@ -284,9 +406,9 @@ impl dma::DMAClient for USART {
             // RX transfer was completed
 
             // disable RX and RX interrupts
-            //XXX: need to do this when the interrupt comes in based on state
-            //self.disable_rx_interrupts();
-            //self.disable_rx();
+            self.disable_rx();
+            self.disable_rx_interrupts();
+            self.usart_rx_state.set(USARTStateRX::Idle);
 
             // get buffer
             let buffer = self.rx_dma.map_or(None, |rx_dma| {
@@ -297,25 +419,20 @@ impl dma::DMAClient for USART {
 
             // alert client
             self.client.map(|c| {
-                //XXX: how do I get the length of a DMA transaction?
-                //NEED TO FIGURE THIS OUT
                 buffer.map(|buf| {
-                    let length = buf.len();
+                    let length = self.rx_len.get();
                     c.receive_complete(buf, length, hil::uart::Error::CommandComplete);
                 });
             });
+            self.rx_len.set(0);
 
         } else if pid == self.tx_dma_peripheral {
 
             // TX transfer was completed
 
-            //use kernel::hil::uart::UART;
-            //self.panic_csr();
-
-            // disable TX and TX interrupts
-            //XXX: need to do this when the interrupt comes in based on state
-            //self.disable_tx_interrupts();
-            //self.disable_tx();
+            // note that the DMA has finished but TX cannot be disabled yet
+            self.usart_tx_state.set(USARTStateTX::Transfer_Completing);
+            self.enable_tx_complete_interrupt();
 
             // get buffer
             let buffer = self.tx_dma.map_or(None, |tx_dma| {
@@ -328,6 +445,7 @@ impl dma::DMAClient for USART {
             self.client.map(|c| {
                 buffer.map(|buf| c.transmit_complete(buf, hil::uart::Error::CommandComplete));
             });
+            self.tx_len.set(0);
         }
     }
 }
@@ -336,8 +454,11 @@ impl dma::DMAClient for USART {
 impl hil::uart::UART for USART {
     fn init (&self, params: hil::uart::UARTParams) {
         // enable USART clock
-        //XXX: should we instead only enable clock when in use?
+        //  must do this before writing any registers
         self.enable_clock();
+
+        // disable interrupts
+        self.disable_interrupts();
 
         // stop any TX and RX and clear status
         self.reset();
@@ -372,37 +493,29 @@ impl hil::uart::UART for USART {
         //XXX: how do you determine the current clock frequency?
         let clock_divider = 16000000 / (8 * params.baud_rate);
         self.set_baud_rate_divider(clock_divider as u16);
-
-        // set transmitter timeguard
-        //XXX: is this necessary
-        self.set_tx_timeguard(4);
-
-        // disable interrupts
-        self.disable_interrupts();
-
-        self.enable_tx();
     }
 
     fn transmit (&self, tx_data: &'static mut [u8], tx_len: usize) {
 
         // quit current transmission if any
-        self.abort_tx();
+        self.abort_tx(hil::uart::Error::RepeatCallError);
 
         // enable TX
-        //XXX: need to set state here too
         self.enable_tx();
+        self.usart_tx_state.set(USARTStateTX::DMA_Transmitting);
 
         // set up dma transfer and start transmission
         self.tx_dma.map(move |dma| {
             dma.enable();
             dma.do_xfer(self.tx_dma_peripheral, tx_data, tx_len);
+            self.tx_len.set(tx_len);
         });
     }
 
     fn receive (&self, rx_buffer: &'static mut [u8], rx_len: usize) {
 
         // quit current reception if any
-        self.abort_rx();
+        self.abort_rx(hil::uart::Error::RepeatCallError);
 
         // truncate rx_len if necessary
         let mut length = rx_len;
@@ -411,67 +524,60 @@ impl hil::uart::UART for USART {
         }
 
         // enable RX
-        //XXX: need to set state here too
-        //self.reset();
         self.enable_rx();
+        self.enable_rx_error_interrupts();
+        self.usart_rx_state.set(USARTStateRX::DMA_Receiving);
 
         // set up dma transfer and start reception
         self.rx_dma.map(move |dma| {
             dma.enable();
             dma.do_xfer(self.rx_dma_peripheral, rx_buffer, length);
+            self.rx_len.set(rx_len);
         });
     }
 
-    fn receive_until_finished (&self, rx_buffer: &'static mut [u8], timeout: u8) {
+    fn receive_automatic (&self, rx_buffer: &'static mut [u8], interbyte_timeout: u8) {
 
         // quit current reception if any
-        self.abort_rx();
+        self.abort_rx(hil::uart::Error::RepeatCallError);
 
         // enable receive timeout
-        self.enable_rx_timeout(timeout);
+        self.enable_rx_timeout(interbyte_timeout);
 
         // enable RX
         self.enable_rx();
+        self.enable_rx_error_interrupts();
+        self.usart_rx_state.set(USARTStateRX::DMA_Receiving);
 
         // set up dma transfer and start reception
         self.rx_dma.map(move |dma| {
             dma.enable();
             let length = rx_buffer.len();
             dma.do_xfer(self.rx_dma_peripheral, rx_buffer, length);
+            self.rx_len.set(length);
         });
     }
 
     fn receive_until_terminator (&self, rx_buffer: &'static mut [u8], terminator: u8) {
 
         // quit current reception if any
-        self.abort_rx();
+        self.abort_rx(hil::uart::Error::RepeatCallError);
 
         // enable receive terminator
         self.enable_rx_terminator(terminator);
 
         // enable RX
         self.enable_rx();
+        self.enable_rx_error_interrupts();
+        self.usart_rx_state.set(USARTStateRX::DMA_Receiving);
 
         // set up dma transfer and start reception
         self.rx_dma.map(move |dma| {
             dma.enable();
             let length = rx_buffer.len();
             dma.do_xfer(self.rx_dma_peripheral, rx_buffer, length);
+            self.rx_len.set(length);
         });
-    }
-
-    //XXX: Testing, remove
-    fn panic_csr (&self) {
-        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
-        let init_csr_val: u32 = regs.csr.get();
-
-        for x in 0..100000 {
-            regs.csr.get();
-        }
-
-        let final_csr_val: u32 = regs.csr.get();
-
-        panic!("CSR: 0x{:x} to 0x{:x}", init_csr_val, final_csr_val);
     }
 }
 

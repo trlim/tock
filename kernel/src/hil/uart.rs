@@ -22,7 +22,7 @@ pub struct UARTParams {
 }
 
 /// The type of error encountered during UART transaction
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 pub enum Error {
     /// Parity error during receive
     ParityError,
@@ -33,11 +33,11 @@ pub enum Error {
     /// Overrun error during receive
     OverrunError,
 
-    /// UART Receive not ready
-    RXNotReady,
+    /// Repeat call of transmit or receive before initial command complete
+    RepeatCallError,
 
-    /// UART Transmit not ready
-    TXNotReady,
+    /// UART hardware was reset
+    ResetError,
 
     /// No error occurred and the command completed successfully
     CommandComplete,
@@ -58,21 +58,18 @@ pub trait UART {
     /// Receive data until buffer is full
     fn receive(&self, rx_buffer: &'static mut [u8], rx_len: usize);
 
-    /// Receive data until `timeout` bit periods have passed since the last byte
+    /// Receive data until `interbyte_timeout` bit periods have passed since the last byte
     /// or buffer is full. Does not timeout until at least one byte has been
     /// received
     ///
-    /// * `timeout` - number of bit periods since last data received
-    fn receive_until_finished(&self, rx_buffer: &'static mut [u8], timeout: u8);
+    /// * `interbyte_timeout` - number of bit periods since last data received
+    fn receive_automatic(&self, rx_buffer: &'static mut [u8], interbyte_timeout: u8);
 
     /// Receive data until `terminator` data byte has been received or buffer
     /// is full
     ///
     /// * `terminator` - data byte terminating a reception
     fn receive_until_terminator(&self, rx_buffer: &'static mut [u8], terminator: u8);
-
-    //XXX: testing, remove
-    fn panic_csr(&self);
 }
 
 
