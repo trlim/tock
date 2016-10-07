@@ -328,13 +328,6 @@ impl USART {
         regs.brgr.set(brgr_val);
     }
 
-    fn set_baud_rate(&self, baud_rate: u32) {
-        let system_frequency = 48000000;
-        let cd = system_frequency / (8 * baud_rate);
-        let regs: &mut Registers = unsafe { mem::transmute(self.regs) };
-        write_volatile(&mut regs.brgr, cd);
-    }
-
     fn set_tx_timeguard (&self, timeguard: u8) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
         let ttgr_val: u32 = 0x00000000 | timeguard as u32;
