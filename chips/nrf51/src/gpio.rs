@@ -145,7 +145,8 @@ impl hil::gpio::GPIOPin for GPIOPin {
     fn clear(&self) {
         GPIO().outclr.set(1 << self.pin);
     }
-
+#[no_mangle]
+#[inline(never)]
     fn toggle(&self) {
         GPIO().out.set((1 << self.pin) ^ GPIO().out.get());
     }

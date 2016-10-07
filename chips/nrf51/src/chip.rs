@@ -37,8 +37,6 @@ impl kernel::Chip for NRF51 {
 
     fn service_pending_interrupts(&mut self) {
         unsafe {
-        unsafe {gpio::PORT[23].toggle();}
-
             INTERRUPT_QUEUE.as_mut().unwrap().dequeue().map(|interrupt| {
                 match interrupt {
                     NvicIdx::RTC1 => rtc::RTC.handle_interrupt(),
@@ -55,7 +53,6 @@ impl kernel::Chip for NRF51 {
     }
 
     fn has_pending_interrupts(&self) -> bool {
-        unsafe {gpio::PORT[22].toggle();}
         unsafe { INTERRUPT_QUEUE.as_mut().unwrap().has_elements() }
     }
 }

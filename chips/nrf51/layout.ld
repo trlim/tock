@@ -89,11 +89,6 @@ SECTIONS
         KEEP (*crtend.o(.dtors))
 
         . = ALIGN(4);
-        _sapps = .;
-        KEEP(*(.app.*))
-        _eapps = .;
-
-        . = ALIGN(4);
         _efixed = .;            /* End of text section */
     } > rom
 
@@ -101,6 +96,7 @@ SECTIONS
     {
         . = ALIGN(4);
         _sapps = .;
+	LONG(0)
         KEEP (*(.app.*))
         _eapps = .;
     } > prog

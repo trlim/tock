@@ -65,7 +65,8 @@ const BUTTON4_PIN: usize = 20;
 
 static mut bytes: [u8; 8] = [0x55, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5A];
 
-
+#[no_mangle]
+#[inline(never)]
 unsafe fn load_process() -> &'static mut [Option<kernel::process::Process<'static>>] {
     use core::ptr::{read_volatile, write_volatile};
     extern "C" {
@@ -180,13 +181,6 @@ pub unsafe fn reset_handler() {
         data_bits: 8,
         parity: kernel::hil::uart::Parity::None,
         mode: kernel::hil::uart::Mode::Normal});
-    nrf51::uart::UART0.enable_tx(); 
-
-    nrf51::uart::UART0.send_byte(0x00);
-    nrf51::uart::UART0.send_byte(0x8f);
-    nrf51::uart::UART0.send_byte(0xAA);
-    nrf51::uart::UART0.send_byte(0x77);
-
     //nrf51::uart::UART0.set_client(console);
 
     // The timer driver is built on top of hardware timer 1, which is implemented
@@ -230,6 +224,7 @@ pub unsafe fn reset_handler() {
         },
         12);
 
+    nrf51::uart::UART0.enable_tx(); 
     nrf51::uart::UART0.set_client(&UC);
 
     alarm.start();
@@ -246,7 +241,6 @@ pub unsafe fn reset_handler() {
     nrf51::gpio::PORT[LED3_PIN].set();
     nrf51::gpio::PORT[LED4_PIN].set();
     nrf51::uart::UART0.send_bytes(&mut bytes as &'static mut [u8; 8], 8);
-    nrf51::gpio::PORT[LED1_PIN].toggle();
     kernel::main(platform, &mut chip, load_process());
 }
 

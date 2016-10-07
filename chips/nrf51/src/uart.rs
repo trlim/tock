@@ -153,8 +153,6 @@ impl UART {
 
     pub fn handle_interrupt(&mut self) {
         nvic::clear_pending(NvicIdx::UART0);
-
-//        unsafe {gpio::PORT[24].toggle();}
         let regs : &Registers = unsafe { mem::transmute(self.regs) };
         let rx = regs.event_rxdrdy.get() != 0;
         let tx = regs.event_txdrdy.get() != 0;
