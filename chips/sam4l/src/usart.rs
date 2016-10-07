@@ -50,12 +50,14 @@ const USART_BASE_ADDRS: [*mut USARTRegisters; 4] = [
 ];
 
 #[derive(Copy, Clone, PartialEq)]
+#[allow(non_camel_case_types)]
 pub enum USARTStateRX {
     Idle,
     DMA_Receiving,
 }
 
 #[derive(Copy, Clone, PartialEq)]
+#[allow(non_camel_case_types)]
 pub enum USARTStateTX {
     Idle,
     DMA_Transmitting,
@@ -131,7 +133,6 @@ impl USART {
     }
 
     pub fn enable_tx (&self) {
-        let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
         let cr_val = 0x00000000 |
             (1 << 6); // TXEN
@@ -216,6 +217,7 @@ impl USART {
         regs.ier.set(ier_val);
     }
 
+    /*
     pub fn enable_tx_complete_interrupt (&self) {
         self.enable_nvic();
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
@@ -223,6 +225,7 @@ impl USART {
             (1 << 9);  // TXRDY
         regs.ier.set(ier_val);
     }
+    */
 
     pub fn disable_rx_interrupts (&self) {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
@@ -266,9 +269,6 @@ impl USART {
 
         self.abort_rx(hil::uart::Error::ResetError);
         self.abort_tx(hil::uart::Error::ResetError);
-
-        self.usart_rx_state.set(USARTStateRX::Idle);
-        self.usart_tx_state.set(USARTStateTX::Idle);
     }
 
     pub fn handle_interrupt (&self) {
@@ -288,22 +288,11 @@ impl USART {
         } else if status & (1 << 5) != 0 { // OVRE
             self.abort_rx(hil::uart::Error::OverrunError);
 
-        } else if status & (1 << 9) != 0 { // TXEMPTY
-            if self.usart_tx_state.get() == USARTStateTX::Transfer_Completing {
-                // transfer complete and no new DMA started. Disable tx
-                self.usart_tx_state.set(USARTStateTX::Idle);
-                self.disable_tx();
-                self.disable_tx_interrupts();
-            } else {
-                panic!("got bad txempty: TX_State: {:x}", self.usart_tx_state.get() as u32);
-            }
-
         } else {
             //XXX: I end up getting interrupt calls with no bits set in the status register
             //  not sure why. Ignoring them for now
-            if status != 0 {
-                panic!("unhandled interrupt. Status: 0x{:x}, IMR: 0x{:x}", status, regs.imr.get());
-            }
+            panic!("unhandled interrupt. Status: 0x{:x}, IMR: 0x{:x}\n States RX: {} TX: {}", status, regs.imr.get(),
+                    self.usart_rx_state.get() as u32, self.usart_tx_state.get() as u32);
         }
 
         // reset status registers
@@ -432,7 +421,7 @@ impl dma::DMAClient for USART {
 
             // note that the DMA has finished but TX cannot be disabled yet
             self.usart_tx_state.set(USARTStateTX::Transfer_Completing);
-            self.enable_tx_complete_interrupt();
+            //self.enable_tx_complete_interrupt();
 
             // get buffer
             let buffer = self.tx_dma.map_or(None, |tx_dma| {
@@ -491,7 +480,7 @@ impl hil::uart::UART for USART {
         // set baud rate
         // NOTE: dependent on oversampling rate
         //XXX: how do you determine the current clock frequency?
-        let clock_divider = 16000000 / (8 * params.baud_rate);
+        let clock_divider = 48000000 / (8 * params.baud_rate);
         self.set_baud_rate_divider(clock_divider as u16);
     }
 

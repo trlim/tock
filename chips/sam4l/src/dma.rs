@@ -192,7 +192,6 @@ impl DMAChannel {
     pub fn handle_interrupt(&mut self) {
         let registers: &mut DMARegisters = unsafe { mem::transmute(self.registers) };
         let channel_num: usize = read_volatile(&registers.peripheral_select);
-        //XXX: this is going to change based on PR #125
         let channel: DMAPeripheral = unsafe { mem::transmute(channel_num as u8) };
 
         self.client.as_mut().map(|client| {
