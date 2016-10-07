@@ -275,7 +275,10 @@ impl USART {
         let regs: &mut USARTRegisters = unsafe {mem::transmute(self.registers)};
         let status = regs.csr.get();
 
-        if status & (1 << 8) != 0 { // TIMEOUT
+        if status & (1 << 12) != 0 {
+            // DO NOTHING. Why are we here!?
+
+        } else if status & (1 << 8) != 0 { // TIMEOUT
             self.disable_rx_timeout();
             self.abort_rx(hil::uart::Error::CommandComplete);
 
@@ -289,10 +292,12 @@ impl USART {
             self.abort_rx(hil::uart::Error::OverrunError);
 
         } else {
-            //XXX: I end up getting interrupt calls with no bits set in the status register
-            //  not sure why. Ignoring them for now
-            panic!("unhandled interrupt. Status: 0x{:x}, IMR: 0x{:x}\n States RX: {} TX: {}", status, regs.imr.get(),
-                    self.usart_rx_state.get() as u32, self.usart_tx_state.get() as u32);
+            if status != 0x0 {
+                //XXX: I end up getting interrupt calls with no bits set in the status register
+                //  not sure why. Ignoring them for now
+                panic!("unhandled interrupt. Status: 0x{:x}, IMR: 0x{:x}\n States RX: {} TX: {}", status, regs.imr.get(),
+                        self.usart_rx_state.get() as u32, self.usart_tx_state.get() as u32);
+            }
         }
 
         // reset status registers
@@ -480,7 +485,7 @@ impl hil::uart::UART for USART {
         // set baud rate
         // NOTE: dependent on oversampling rate
         //XXX: how do you determine the current clock frequency?
-        let clock_divider = 48000000 / (8 * params.baud_rate);
+        let clock_divider = 16000000 / (8 * params.baud_rate);
         self.set_baud_rate_divider(clock_divider as u16);
     }
 
