@@ -650,7 +650,7 @@ impl I2CHw {
 }
 
 impl DMAClient for I2CHw {
-    fn xfer_done(&mut self, _pid: usize) {}
+    fn xfer_done(&self, _pid: DMAPeripheral) {}
 }
 
 impl hil::i2c::I2CMaster for I2CHw {
