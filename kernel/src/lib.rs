@@ -9,6 +9,8 @@ pub mod driver;
 pub mod mem;
 pub mod process;
 pub mod hil;
+use hil::gpio;
+use nrf51::gpio;
 
 pub mod support;
 
@@ -27,6 +29,7 @@ pub use process::{Process, State};
 pub fn main<P: Platform, C: Chip>(platform: &mut P,
                                   chip: &mut C,
                                   processes: &'static mut [Option<process::Process<'static>>]) {
+
     let processes = unsafe {
         process::PROCS = processes;
         &mut process::PROCS

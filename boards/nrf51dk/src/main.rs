@@ -160,9 +160,6 @@ pub unsafe fn reset_handler() {
         ],
         4 * 22);
 
-    nrf51::gpio::PORT[LED1_PIN].enable_output();
-    nrf51::gpio::PORT[LED1_PIN].clear();
-
     let gpio = static_init!(
         capsules::gpio::GPIO<'static, nrf51::gpio::GPIOPin>,
         capsules::gpio::GPIO::new(gpio_pins),
@@ -240,6 +237,7 @@ pub unsafe fn reset_handler() {
     let mut chip = nrf51::chip::NRF51::new();
     chip.systick().reset();
     chip.systick().enable(true);
+    nrf51::gpio::PORT[LED1_PIN].enable_output();
     nrf51::gpio::PORT[LED2_PIN].enable_output();
     nrf51::gpio::PORT[LED3_PIN].enable_output();
     nrf51::gpio::PORT[LED4_PIN].enable_output();
