@@ -35,7 +35,6 @@ impl Controller for Rtc {
 //
 // wait_task() will delay approximately this time. For a 16 MHz CPU,
 // 1us == 16 instructions (assuming each instruction takes one cycle).
-#[inline(never)]
 fn wait_task() {
     // The inner loop instructions are: 14 NOPs + 1 SUBS + 1 CMP
     unsafe {

@@ -65,8 +65,6 @@ const BUTTON4_PIN: usize = 20;
 
 static mut bytes: [u8; 8] = [0x55, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A, 0x5A];
 
-#[no_mangle]
-#[inline(never)]
 unsafe fn load_process() -> &'static mut [Option<kernel::process::Process<'static>>] {
     use core::ptr::{read_volatile, write_volatile};
     extern "C" {
