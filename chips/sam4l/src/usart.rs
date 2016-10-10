@@ -612,7 +612,7 @@ impl hil::uart::UART for USART {
         // set baud rate
         // NOTE: dependent on oversampling rate
         // XXX: how do you determine the current clock frequency?
-        let clock_divider = 48000000 / (8 * params.baud_rate);
+        let clock_divider = 16000000 / (8 * params.baud_rate);
         self.set_baud_rate_divider(clock_divider as u16);
     }
 
