@@ -379,33 +379,41 @@ impl spi::SpiMaster for Spi {
         self.write_active_csr(csr);
     }
 
-    fn set_chip_select(&self, cs: u8) -> bool {
-        let peripheral_number = match cs {
-            0 => Peripheral::Peripheral0,
-            1 => Peripheral::Peripheral1,
-            2 => Peripheral::Peripheral2,
-            3 => Peripheral::Peripheral3,
-            _ => return false,
-        };
-        self.set_active_peripheral(peripheral_number);
-        true
-    }
-
-    fn get_chip_select(&self) -> u8 {
-        let mr = unsafe { read_volatile(&(*self.regs).mr) };
-        let cs = (mr >> 16) & 0xF;
+    fn set_chip_select(&self, cs: spi::ChipSelect<'static>) {
         match cs {
-            0b0000 => 0,
-            0b0001 => 1,
-            0b0011 => 2,
-            0b0111 => 3,
-            _ => 0,
+            spi::ChipSelect::Number(number) => {
+                let peripheral_number = match number {
+                    0 => Peripheral::Peripheral0,
+                    1 => Peripheral::Peripheral1,
+                    2 => Peripheral::Peripheral2,
+                    3 => Peripheral::Peripheral3,
+                    _ => Peripheral::Peripheral0,
+                };
+                self.set_active_peripheral(peripheral_number);
+            }
+            spi::ChipSelect::Gpio(pin) => {
+
+            }
         }
+
+        // cs
     }
 
-    fn clear_chip_select(&self) {
-        unsafe { write_volatile(&mut (*self.regs).cr, 1 << 24) };
-    }
+    // fn get_chip_select(&self) -> u8 {
+    //     let mr = unsafe { read_volatile(&(*self.regs).mr) };
+    //     let cs = (mr >> 16) & 0xF;
+    //     match cs {
+    //         0b0000 => 0,
+    //         0b0001 => 1,
+    //         0b0011 => 2,
+    //         0b0111 => 3,
+    //         _ => 0,
+    //     }
+    // }
+
+    // fn clear_chip_select(&self) {
+    //     unsafe { write_volatile(&mut (*self.regs).cr, 1 << 24) };
+    // }
 }
 
 impl DMAClient for Spi {

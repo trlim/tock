@@ -90,6 +90,8 @@ pub struct USART {
     tx_len: Cell<usize>,
 
     client: TakeCell<UsartClient<'static>>,
+
+    spi_chip_select: TakeCell<hil::spi::ChipSelect<'static>>,
 }
 
 // USART hardware peripherals on SAM4L
@@ -141,6 +143,8 @@ impl USART {
 
             // this gets defined later by `main.rs`
             client: TakeCell::empty(),
+
+            spi_chip_select: TakeCell::empty(),
         }
     }
 
@@ -528,7 +532,18 @@ impl dma::DMAClient for USART {
                 if pid == self.tx_dma_peripheral {
 
                     // TX transfer was completed
-                    self.rts_disable_spi_deassert_cs();
+                    // self.rts_disable_spi_deassert_cs();
+
+                    self.spi_chip_select.map(|cs| {
+                        match *cs {
+                            hil::spi::ChipSelect::Number(num) => {
+                                self.rts_disable_spi_deassert_cs();
+                            }
+                            hil::spi::ChipSelect::Gpio(gpio) => {
+                                gpio.set();
+                            }
+                        }
+                    });
 
                     // note that the DMA has finished but TX cannot be disabled yet
                     self.usart_tx_state.set(USARTStateTX::Transfer_Completing);
@@ -755,7 +770,17 @@ impl hil::spi::SpiMaster for USART {
         self.tx_len.set(count);
 
         // Set !CS low
-        self.rts_enable_spi_assert_cs();
+        self.spi_chip_select.map(|cs| {
+            match *cs {
+                hil::spi::ChipSelect::Number(num) => {
+                    self.rts_enable_spi_assert_cs();
+                }
+                hil::spi::ChipSelect::Gpio(gpio) => {
+                    gpio.clear();
+                }
+            }
+        });
+
 
         // Set up dma transfer and start transmission
         self.tx_dma.map(move |dma| {
@@ -791,13 +816,15 @@ impl hil::spi::SpiMaster for USART {
 
     /// Returns whether this chip select is valid and was
     /// applied, 0 is always valid.
-    fn set_chip_select(&self, cs: u8) -> bool {
-        return false;
+    fn set_chip_select(&self, cs: hil::spi::ChipSelect<'static>) {
+        self.spi_chip_select.replace(cs);
+
+        // cs
     }
-    fn clear_chip_select(&self) {}
-    fn get_chip_select(&self) -> u8 {
-        return 0;
-    }
+    // fn clear_chip_select(&self) {}
+    // fn get_chip_select(&self) -> u8 {
+    //     return 0;
+    // }
 
     /// Returns the actual rate set
     fn set_rate(&self, rate: u32) -> u32 {
