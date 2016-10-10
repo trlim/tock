@@ -206,7 +206,8 @@ impl I2CHw {
         // Ultimately we should understand what the heck these parameters actually mean and either
         // confirm them or replace them. They almost certainly depend on the clock speed of the
         // CPU, so we'll need to change them if we change the CPU clock speed.
-        let (exp, data, stasto, high, low) = (3, 4, 10, 10, 10);
+        // let (exp, data, stasto, high, low) = (3, 4, 10, 10, 10);
+        let (exp, data, stasto, high, low) = (1, 4, 10, 10, 10);
 
         let cwgr = ((exp & 0x7) << 28) | ((data & 0xF) << 24) | ((stasto & 0xFF) << 16) |
                    ((high & 0xFF) << 8) | ((low & 0xFF) << 0);

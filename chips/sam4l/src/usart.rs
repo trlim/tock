@@ -335,15 +335,15 @@ impl USART {
             self.abort_rx(hil::uart::Error::OverrunError);
 
         } else {
-            if status != 0x0 {
-                // XXX: I end up getting interrupt calls with no bits set in the status register
-                //  not sure why. Ignoring them for now
-                panic!("unhandled interrupt. Status: 0x{:x}, IMR: 0x{:x}\n States RX: {} TX: {}",
-                       status,
-                       regs.imr.get(),
-                       self.usart_rx_state.get() as u32,
-                       self.usart_tx_state.get() as u32);
-            }
+            // if status != 0x0 {
+            //     // XXX: I end up getting interrupt calls with no bits set in the status register
+            //     //  not sure why. Ignoring them for now
+            //     panic!("unhandled interrupt. Status: 0x{:x}, IMR: 0x{:x}\n States RX: {} TX: {}",
+            //            status,
+            //            regs.imr.get(),
+            //            self.usart_rx_state.get() as u32,
+            //            self.usart_tx_state.get() as u32);
+            // }
         }
 
         // reset status registers
