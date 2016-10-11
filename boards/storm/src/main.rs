@@ -295,6 +295,8 @@ unsafe fn set_pin_primary_functions() {
 pub unsafe fn reset_handler() {
     sam4l::init();
 
+    sam4l::pm::setup_system_clock(sam4l::pm::SystemClockSource::DfllRc32k, 48000000);
+
     // Workaround for SB.02 hardware bug
     // TODO(alevy): Get rid of this when we think SB.02 are out of circulation
     sam4l::gpio::PA[14].enable();
@@ -313,8 +315,9 @@ pub unsafe fn reset_handler() {
         Console<usart::USART>,
         Console::new(&usart::USART3,
                      &mut console::WRITE_BUF,
+                     &mut console::READ_BUF,
                      kernel::Container::create()),
-        24);
+        256/8);
     usart::USART3.set_client(console);
 
     // Create the Nrf51822Serialization driver for passing BLE commands
@@ -322,8 +325,9 @@ pub unsafe fn reset_handler() {
     let nrf_serialization = static_init!(
         Nrf51822Serialization<usart::USART>,
         Nrf51822Serialization::new(&usart::USART2,
-                                   &mut nrf51822_serialization::WRITE_BUF),
-        68);
+                                   &mut nrf51822_serialization::WRITE_BUF,
+                                   &mut nrf51822_serialization::READ_BUF),
+        608/8);
     usart::USART2.set_client(nrf_serialization);
 
     let ast = &sam4l::ast::AST;
@@ -335,7 +339,7 @@ pub unsafe fn reset_handler() {
     ast.configure(mux_alarm);
 
     let mux_i2c = static_init!(MuxI2C<'static>, MuxI2C::new(&sam4l::i2c::I2C2), 20);
-    sam4l::i2c::I2C2.set_client(mux_i2c);
+    sam4l::i2c::I2C2.set_master_client(mux_i2c);
 
     // Configure the TMP006. Device address 0x40
     let tmp006_i2c = static_init!(I2CDevice, I2CDevice::new(mux_i2c, 0x40), 32);
@@ -419,23 +423,8 @@ pub unsafe fn reset_handler() {
             spi: spi,
             nrf51822: nrf_serialization,
         },
-        28);
+        224/8);
 
-    usart::USART3.configure(usart::USARTParams {
-        // client: &console,
-        baud_rate: 115200,
-        data_bits: 8,
-        parity: kernel::hil::uart::Parity::None,
-        mode: kernel::hil::uart::Mode::Normal,
-    });
-
-    // Setup USART2 for the nRF51822 connection
-    usart::USART2.configure(usart::USARTParams {
-        baud_rate: 250000,
-        data_bits: 8,
-        parity: kernel::hil::uart::Parity::Even,
-        mode: kernel::hil::uart::Mode::FlowControl,
-    });
     // Configure USART2 Pins for connection to nRF51822
     // NOTE: the SAM RTS pin is not working for some reason. Our hypothesis is
     //  that it is because RX DMA is not set up. For now, just having it always

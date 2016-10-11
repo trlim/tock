@@ -40,23 +40,40 @@ impl<'a> MuxSPIMaster<'a> {
                 match node.operation.get() {
                     Op::Configure(cpol, cpal, rate) => {
 
-                        match node.chip_select {
-                            Some(x) => {
-                                self.spi.set_chip_select(x);
-                            }
-                            None => {}
-                        }
-
-                        // In theory, the SPI interface should support
-                        // using a GPIO in lieu of a hardware CS line.
-                        // This is particularly important for the SAM4L
-                        // if using a USART, but might be relevant
-                        // for other platforms as well.
-                        // TODO: make this do something if given GPIO pin
-                        // match node.chip_select_gpio {
-                        //     Some() => { },
+                        // match node.chip_select {
+                        //     Some(x) => {
+                        //         self.spi.set_chip_select(x);
+                        //     }
                         //     None => {}
                         // }
+
+                        // // In theory, the SPI interface should support
+                        // // using a GPIO in lieu of a hardware CS line.
+                        // // This is particularly important for the SAM4L
+                        // // if using a USART, but might be relevant
+                        // // for other platforms as well.
+                        // // TODO: make this do something if given GPIO pin
+                        // // match node.chip_select_gpio {
+                        // //     Some() => { },
+                        // //     None => {}
+                        // // }
+
+                        // node.chip_select.take().map(|cs| {
+                        //     self.spi.set_chip_select(cs);
+
+                        //     // node.chip_select.replace(cs);
+                        // });
+
+                        node.chip_select.take().map(|cs| {
+                            self.spi.set_chip_select(cs)
+
+
+
+                            // node.chip_select.replace(a);
+                        });
+                        // node.chip_select.put(a);
+
+
 
                         self.spi.set_clock(cpol);
                         self.spi.set_phase(cpal);
@@ -93,8 +110,9 @@ enum Op {
 
 pub struct SPIMasterDevice<'a> {
     mux: &'a MuxSPIMaster<'a>,
-    chip_select: Option<u8>,
-    chip_select_gpio: Option<&'static hil::gpio::Pin>,
+    // chip_select: Option<u8>,
+    // chip_select_gpio: Option<&'static hil::gpio::Pin>,
+    chip_select: TakeCell<hil::spi::ChipSelect<'static>>,
     txbuffer: TakeCell<&'static mut [u8]>,
     rxbuffer: TakeCell<Option<&'static mut [u8]>>,
     operation: Cell<Op>,
@@ -104,13 +122,12 @@ pub struct SPIMasterDevice<'a> {
 
 impl<'a> SPIMasterDevice<'a> {
     pub const fn new(mux: &'a MuxSPIMaster<'a>,
-                     chip_select: Option<u8>,
-                     chip_select_gpio: Option<&'static hil::gpio::Pin>)
+                     chip_select: hil::spi::ChipSelect<'static>)
                      -> SPIMasterDevice<'a> {
         SPIMasterDevice {
             mux: mux,
-            chip_select: chip_select,
-            chip_select_gpio: chip_select_gpio,
+            chip_select: TakeCell::new(chip_select),
+            // chip_select_gpio: chip_select_gpio,
             txbuffer: TakeCell::empty(),
             rxbuffer: TakeCell::empty(),
             operation: Cell::new(Op::Idle),
