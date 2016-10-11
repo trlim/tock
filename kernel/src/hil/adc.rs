@@ -1,5 +1,5 @@
 pub trait Client {
-    fn sample_done(&self, sample:u16);
+    fn sample_done(&self, sample: u16);
 }
 
 pub trait AdcSingle {
