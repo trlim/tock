@@ -85,11 +85,11 @@ impl Adc {
             client: TakeCell::empty(),
         }
     }
-    
+
     pub fn set_client<C: hil::adc::Client>(&self, client: &'static C) {
         self.client.replace(client);
     }
-    
+
     pub fn handle_interrupt(&mut self) {
         let val: u16;
         unsafe {
@@ -139,12 +139,12 @@ impl AdcSingle for Adc {
                 ptr::write_volatile(&mut (*self.registers).cr, cr2);
 
                 // 6. Configure the ADCIFE
-                // Setting all 0s in the configuration register sets
+                // Setting below in the configuration register sets
                 //   - the clock divider to be 4,
                 //   - the source to be the Generic clock,
                 //   - the max speed to be 300 ksps, and
-                //   - the reference voltage to be 1.0V
-                ptr::write_volatile(&mut (*self.registers).cfg, 0x00000030 as usize);
+                //   - the reference voltage to be VCC/2
+                ptr::write_volatile(&mut (*self.registers).cfg, 0x00000008 as usize);
                 while ptr::read_volatile(&(*self.registers).sr) & (0x51000000) != 0x51000000 {}
             }
         }
@@ -175,7 +175,7 @@ impl AdcSingle for Adc {
                 cfg |= 0x00000000; // RES      =   0 (12-bit)
                 cfg |= 0x00000000; // TRGSEL   =   0 (software)
                 cfg |= 0x00000000; // GCOMP    =   0 (no gain error corr)
-                cfg |= 0x00000000; // GAIN     =   0 (1x gain)
+                cfg |= 0x00000070; // GAIN     = 111 (0.5x gain)
                 cfg |= 0x00000000; // BIPOLAR  =   0 (not bipolar)
                 cfg |= 0x00000001; // HWLA     =   1 (left justify value)
                 ptr::write_volatile(&mut (*self.registers).seqcfg, cfg);
