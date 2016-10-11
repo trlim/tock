@@ -70,7 +70,7 @@ pub const BASE_ADDRESS: usize = 0x40038000;
 
 pub struct Adc {
     registers: *mut AdcRegisters,
-    enabled: bool,
+    enabled: Cell<bool>,
     channel: Cell<u8>,
     client: TakeCell<&'static hil::adc::Client>,
 }
@@ -80,7 +80,7 @@ impl Adc {
         let address = BASE_ADDRESS;
         Adc {
             registers: unsafe { intrinsics::transmute(address) },
-            enabled: false,
+            enabled: Cell::new(false),
             channel: Cell::new(0),
             client: TakeCell::empty(),
         }
@@ -112,9 +112,9 @@ impl Adc {
 }
 
 impl AdcSingle for Adc {
-    fn initialize(&'static mut self) -> bool {
-        if !self.enabled {
-            self.enabled = true;
+    fn initialize(&self) -> bool {
+        if !self.enabled.get() {
+            self.enabled.set(true);
             unsafe {
                 // This logic is from 38.6.1 "Initializing the ADCIFE" of
                 // the SAM4L data sheet
@@ -152,7 +152,7 @@ impl AdcSingle for Adc {
     }
 
     fn sample(&self, channel: u8) -> bool {
-        if !self.enabled || channel > 14 {
+        if !self.enabled.get() || channel > 14 {
             return false;
         } else {
             self.channel.set(channel);

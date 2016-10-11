@@ -3,7 +3,7 @@ pub trait Client {
 }
 
 pub trait AdcSingle {
-    fn initialize(&'static mut self) -> bool;
+    fn initialize(&self) -> bool;
     fn sample(&self, channel: u8) -> bool;
     //fn cancel_sample(&self) -> bool;
 }
