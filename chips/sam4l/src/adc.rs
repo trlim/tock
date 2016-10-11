@@ -33,7 +33,9 @@
 
 use core::{intrinsics, ptr};
 use core::cell::Cell;
-use kernel::hil::adc::{Request, AdcInternal};
+use kernel::common::take_cell::TakeCell;
+use kernel::hil;
+use kernel::hil::adc::{AdcSingle};
 use nvic;
 use pm::{self, Clock, PBAClock};
 use scif;
@@ -70,7 +72,7 @@ pub struct Adc {
     registers: *mut AdcRegisters,
     enabled: bool,
     channel: Cell<u8>,
-    request: Cell<Option<&'static Request>>,
+    client: TakeCell<&'static hil::adc::Client>,
 }
 
 impl Adc {
@@ -80,9 +82,14 @@ impl Adc {
             registers: unsafe { intrinsics::transmute(address) },
             enabled: false,
             channel: Cell::new(0),
-            request: Cell::new(None),
+            client: TakeCell::empty(),
         }
     }
+    
+    pub fn set_client<C: hil::adc::Client>(&self, client: &'static C) {
+        self.client.replace(client);
+    }
+    
     pub fn handle_interrupt(&mut self) {
         let val: u16;
         unsafe {
@@ -95,17 +102,16 @@ impl Adc {
             // the sample is 16 bits wide
             val = (ptr::read_volatile(&(*self.registers).lcv) & 0xffff) as u16;
         }
-        if self.request.get().is_none() {
+        if self.client.is_none() {
             return;
         }
-        let opt = self.request.get().take();
-        let copt: &'static Request = opt.unwrap();
-        self.request = Cell::new(None);
-        copt.sample_done(val, copt);
+        self.client.map(|client| {
+          client.sample_done(val);
+        });
     }
 }
 
-impl AdcInternal for Adc {
+impl AdcSingle for Adc {
     fn initialize(&'static mut self) -> bool {
         if !self.enabled {
             self.enabled = true;
@@ -145,11 +151,10 @@ impl AdcInternal for Adc {
         return true;
     }
 
-    fn sample(&self, channel: u8, request: &'static Request) -> bool {
-        if !self.enabled || self.request.get().is_some() || channel > 14 {
+    fn sample(&self, channel: u8) -> bool {
+        if !self.enabled || channel > 14 {
             return false;
         } else {
-            self.request.set(Some(request));
             self.channel.set(channel);
             // This configuration sets the ADC to use Pad Ground as the
             // negative input, and the ADC channel as the positive. Since
