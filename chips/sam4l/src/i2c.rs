@@ -528,18 +528,28 @@ impl I2CHw {
                 } else if interrupts & (1 << 0) > 0 {
                     // Receive byte ready.
 
-                    // Only read in byte if BTF is set. Otherwise there can
-                    // be spurious interrupts for some reason.
-                    if self.slave_write_buffer.is_some() && (status & (1 << 23) > 0) {
-                        // Have buffer to read into
-                        let len = self.slave_write_buffer_len.get();
-                        let idx = self.slave_write_buffer_index.get();
+                    if self.slave_write_buffer.is_some()  {
+                        // Check that the BTF byte is set at the beginning of
+                        // the transfer. Sometimes a spurious RX ready interrupt
+                        // happens at the beginning (right after the address
+                        // byte) that we need to ignore, and checking the BTF
+                        // bit fixes that. However, sometimes in the middle of a
+                        // transfer we get an RXREADY interrupt where the BTF
+                        // bit is NOT set. I don't know why.
+                        if status & (1 << 23) > 0 || self.slave_write_buffer_index.get() > 0 {
+                            // Have buffer to read into
+                            let len = self.slave_write_buffer_len.get();
+                            let idx = self.slave_write_buffer_index.get();
 
-                        if len > idx {
-                            self.slave_write_buffer.map(|buffer| {
-                                buffer[idx as usize] = regs.receive_holding.get() as u8;
-                            });
-                            self.slave_write_buffer_index.set(idx + 1);
+                            if len > idx {
+                                self.slave_write_buffer.map(|buffer| {
+                                    buffer[idx as usize] = regs.receive_holding.get() as u8;
+                                });
+                                self.slave_write_buffer_index.set(idx + 1);
+                            } else {
+                                // Just drop on floor
+                                regs.receive_holding.get();
+                            }
                         } else {
                             // Just drop on floor
                             regs.receive_holding.get();
