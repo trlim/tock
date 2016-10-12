@@ -81,7 +81,7 @@ pub struct Adc {
 pub static mut ADC: Adc = Adc::new(BASE_ADDRESS);
 
 impl Adc {
-    pub fn new(base_address: *mut AdcRegisters) -> Adc {
+    const fn new(base_address: *mut AdcRegisters) -> Adc {
         Adc {
             registers: base_address,
             enabled: Cell::new(false),
