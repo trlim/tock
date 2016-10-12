@@ -12,6 +12,7 @@ enum State {
     Disabled,
     Enabling,
     ReadingLI,
+    ReadingDelay,
     Disabling(usize),
 }
 
@@ -83,7 +84,16 @@ impl<'a> I2CClient for Isl29035<'a> {
         // TODO(alevy): handle I2C errors
         match self.state.get() {
             State::Enabling => {
+                // Delay by reading id register so we give the reading
+                // enough time.
+                buffer[0] = 15 as u8;
+
+                self.i2c.write_read(buffer, 1, 2);
+                self.state.set(State::ReadingDelay);
+            }
+            State::ReadingDelay => {
                 buffer[0] = 0x02 as u8;
+
                 self.i2c.write_read(buffer, 1, 2);
                 self.state.set(State::ReadingLI);
             }
