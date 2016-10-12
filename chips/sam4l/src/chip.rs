@@ -47,6 +47,9 @@ impl Sam4l {
         dma::DMAChannels[8].client = Some(&mut usart::USART0);
         dma::DMAChannels[9].client = Some(&mut usart::USART0);
 
+        i2c::I2C0.set_dma(&dma::DMAChannels[10]);
+        dma::DMAChannels[10].client = Some(&mut i2c::I2C0);
+
         Sam4l {
             mpu: cortexm4::mpu::MPU::new(),
             systick: cortexm4::systick::SysTick::new(),
