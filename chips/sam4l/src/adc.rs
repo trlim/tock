@@ -95,6 +95,7 @@ impl Adc {
     }
 
     pub fn handle_interrupt(&mut self) {
+        panic!("sam4l adc handle interrupt");
         let val: u16;
         let regs: &mut AdcRegisters = unsafe { mem::transmute(self.registers) };
         // Clear SEOC interrupt

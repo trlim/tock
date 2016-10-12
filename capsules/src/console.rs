@@ -54,7 +54,7 @@ impl<'a, U: UART> Console<'a, U> {
 
     pub fn initialize(&self) {
         self.uart.init(uart::UARTParams {
-            baud_rate: 115200,
+            baud_rate: 115200/3,
             stop_bits: uart::StopBits::One,
             parity: uart::Parity::None,
             hw_flow_control: false,
