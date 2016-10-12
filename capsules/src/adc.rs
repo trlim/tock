@@ -2,14 +2,14 @@ use core::cell::Cell;
 use kernel::{AppId, Callback, Driver};
 use kernel::hil::adc::{Client, AdcSingle};
 
-pub struct ADC<'a> {
-    adc: &'a AdcSingle,
+pub struct ADC<'a, A: AdcSingle + 'a> {
+    adc: &'a A,
     channel: Cell<u8>,
     callback: Cell<Option<Callback>>,
 }
 
-impl<'a> ADC<'a> {
-    pub fn new(adc: &'a AdcSingle) -> ADC<'a> {
+impl<'a, A: AdcSingle + 'a> ADC<'a, A> {
+    pub fn new(adc: &'a A) -> ADC<'a, A> {
         ADC {
             adc: adc,
             channel: Cell::new(0),
@@ -27,7 +27,7 @@ impl<'a> ADC<'a> {
     }
 }
 
-impl<'a> Client for ADC<'a> {
+impl<'a, A: AdcSingle + 'a> Client for ADC<'a, A> {
     fn sample_done(&self, sample: u16) {
         if self.callback.get().is_some() {
             self.callback.get().unwrap().schedule(0, self.channel.get() as usize, sample as usize);
@@ -35,7 +35,7 @@ impl<'a> Client for ADC<'a> {
     }
 }
 
-impl<'a> Driver for ADC<'a> {
+impl<'a, A: AdcSingle + 'a> Driver for ADC<'a, A> {
     fn subscribe(&self, subscribe_num: usize, callback: Callback) -> isize {
         match subscribe_num {
             // subscribe to ADC sample done
