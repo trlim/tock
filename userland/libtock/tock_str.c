@@ -65,6 +65,11 @@ void putstr(const char *str) {
   putnstr(str, strlen(str));
 }
 
+void getauto(char* str, size_t max_len, subscribe_cb cb, void* userdata) {
+  allow(0, 0, (void*)str, max_len);
+  subscribe(0, 2, cb, userdata);
+}
+
 int timer_subscribe(subscribe_cb cb, void *userdata) {
   return subscribe(3, 0, cb, userdata);
 }
