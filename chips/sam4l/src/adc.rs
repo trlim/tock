@@ -5,7 +5,7 @@
 // all samples
 //   - are 12 bits
 //   - use the ground pad as the negative reference
-//   - use a 1V positive reference
+//   - use a VCC/2 positive reference
 //   - are hardware left justified (16 bits wide, bottom 4 bits empty)
 //
 // NOTE: The pin labels/assignments on the Firestorm schematic are
@@ -165,7 +165,7 @@ impl AdcSingle for Adc {
             // negative input, and the ADC channel as the positive. Since
             // this is a single-ended sample, the bipolar bit is set to zero.
             // Trigger select is set to zero because this denotes a software
-            // sample. Gain is 1x (set to 0). Resolution is set to 12 bits
+            // sample. Gain is 0.5x (set to 111). Resolution is set to 12 bits
             // (set to 0). The one trick is that the half word left adjust
             // (HWLA) is set to 1. This means that both 12-bit and 8-bit
             // samples are left justified to the lower 16 bits. So they share
