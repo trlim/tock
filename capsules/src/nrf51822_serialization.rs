@@ -49,9 +49,6 @@ impl<'a, U: UART> Nrf51822Serialization<'a, U> {
             parity: uart::Parity::Even,
             hw_flow_control: true,
         });
-        self.rx_buffer.take().map(|buffer| {
-            self.uart.receive(buffer, 1);
-        });
     }
 }
 
@@ -124,6 +121,12 @@ impl<'a, U: UART> Driver for Nrf51822Serialization<'a, U> {
                         app
                     }
                     None => {
+                        // can't start receiving until DMA has been set up
+                        //  we'll start here when subscribe is first called
+                        self.rx_buffer.take().map(|buffer| {
+                            self.uart.receive(buffer, 1);
+                        });
+
                         App {
                             callback: Some(callback),
                             tx_buffer: None,
@@ -134,6 +137,7 @@ impl<'a, U: UART> Driver for Nrf51822Serialization<'a, U> {
                     }
                 };
                 self.app.replace(resapp);
+
                 0
             }
             _ => -1,
