@@ -33,7 +33,6 @@ impl Write for Writer {
     }
 }
 
-
 #[cfg(not(test))]
 #[lang="panic_fmt"]
 #[no_mangle]
@@ -42,7 +41,6 @@ pub unsafe extern "C" fn rust_begin_unwind(args: Arguments, file: &'static str, 
     let writer = &mut WRITER;
     let _ = writer.write_fmt(format_args!("Kernel panic at {}:{}:\r\n\t\"", file, line));
     let _ = write(writer, args);
-    let _ = writer.write_str("\"\r\n");
 
     let led = &sam4l::gpio::PC[10];
     led.enable_output();

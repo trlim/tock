@@ -92,6 +92,8 @@ pub struct USART {
     client: TakeCell<UsartClient<'static>>,
 
     spi_chip_select: TakeCell<hil::spi::ChipSelect<'static>>,
+
+    clock_freq: Cell<u32>,
 }
 
 // USART hardware peripherals on SAM4L
@@ -145,6 +147,8 @@ impl USART {
             client: TakeCell::empty(),
 
             spi_chip_select: TakeCell::empty(),
+
+            clock_freq: Cell::new(48000000),
         }
     }
 
@@ -373,9 +377,13 @@ impl USART {
         regs.mr.set(mode);
     }
 
+    pub fn set_clock_freq(&self, clock_freq: u32) {
+        self.clock_freq.set(clock_freq);
+    }
+
     fn set_baud_rate(&self, baud_rate: u32) {
         let regs: &mut USARTRegisters = unsafe { mem::transmute(self.registers) };
-        let cd = 48000000 / (8 * baud_rate);
+        let cd = self.clock_freq.get() / (8 * baud_rate);
         let brgr_val: u32 = 0x00000000 | cd as u32;
         regs.brgr.set(brgr_val);
     }
@@ -627,7 +635,7 @@ impl hil::uart::UART for USART {
         // set baud rate
         // NOTE: dependent on oversampling rate
         // XXX: how do you determine the current clock frequency?
-        let clock_divider = 16000000 / (8 * params.baud_rate);
+        let clock_divider = self.clock_freq.get() / (8 * params.baud_rate);
         self.set_baud_rate_divider(clock_divider as u16);
     }
 
@@ -727,7 +735,7 @@ impl hil::spi::SpiMaster for USART {
         self.enable_clock();
 
         // Set baud rate. Different math for SPI
-        let cd = 16000000 / (2000000);
+        let cd = self.clock_freq.get() / (2000000);
         regs.brgr.set(cd);
 
         let mode =
