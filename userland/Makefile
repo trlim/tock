@@ -35,6 +35,10 @@ LD := $(TOOLCHAIN)-ld
 LINKER ?= $(TOCK_USERLAND_BASE_DIR)/linker.ld
 LDFLAGS := -T $(LINKER)
 
+SIZE?=arm-none-eabi-size
+OBJDUMP?=arm-none-eabi-objdump
+OBJDUMP_FLAGS+= --disassemble-all --source --disassembler-options=force-thumb -C --section-headers
+
 .PHONY:	all
 all:	$(BUILDDIR)/app.bin
 
@@ -46,6 +50,8 @@ $(BUILDDIR):
 
 $(BUILDDIR)/app.elf: $(OBJS) $(TOCK_USERLAND_BASE_DIR)/newlib/libc.a $(LIBTOCK) | $(BUILDDIR)
 	$(LD) --gc-sections --emit-relocs --entry=_start $(LDFLAGS) -nostdlib $(OBJS) --start-group $(TOCK_USERLAND_BASE_DIR)/newlib/libc.a $(LIBTOCK) --end-group -o $@
+	@$(OBJDUMP) $(OBJDUMP_FLAGS) $@ > $(BUILDDIR)/app.lst
+	@$(SIZE) $@
 
 $(BUILDDIR)/app.bin: $(BUILDDIR)/app.elf | $(BUILDDIR)
 	$(ELF2TBF) -o $@ $<

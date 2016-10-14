@@ -318,7 +318,7 @@ pub unsafe fn reset_handler() {
                      &mut console::READ_BUF,
                      kernel::Container::create()),
         256/8);
-    usart::USART3.set_client(console);
+    usart::USART3.set_uart_client(console);
 
     // Create the Nrf51822Serialization driver for passing BLE commands
     // over UART to the nRF51822 radio.
@@ -328,7 +328,7 @@ pub unsafe fn reset_handler() {
                                    &mut nrf51822_serialization::WRITE_BUF,
                                    &mut nrf51822_serialization::READ_BUF),
         608/8);
-    usart::USART2.set_client(nrf_serialization);
+    usart::USART2.set_uart_client(nrf_serialization);
 
     let ast = &sam4l::ast::AST;
 
