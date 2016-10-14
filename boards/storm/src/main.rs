@@ -306,22 +306,26 @@ pub unsafe fn reset_handler() {
 
     // Source 32Khz and 1Khz clocks from RC23K (SAM4L Datasheet 11.6.8)
     sam4l::bpm::set_ck32source(sam4l::bpm::CK32Source::RC32K);
-
+    let clock_freq = 48000000;
 
 
     set_pin_primary_functions();
 
+    usart::USART3.set_clock_freq(clock_freq);
     let console = static_init!(
         Console<usart::USART>,
         Console::new(&usart::USART3,
+                     115200,
                      &mut console::WRITE_BUF,
                      &mut console::READ_BUF,
+                     &mut console::LINE_BUF,
                      kernel::Container::create()),
-        256/8);
+        416/8);
     usart::USART3.set_uart_client(console);
 
     // Create the Nrf51822Serialization driver for passing BLE commands
     // over UART to the nRF51822 radio.
+    usart::USART2.set_clock_freq(clock_freq);
     let nrf_serialization = static_init!(
         Nrf51822Serialization<usart::USART>,
         Nrf51822Serialization::new(&usart::USART2,

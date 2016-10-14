@@ -41,10 +41,12 @@ pub struct Console<'a, U: UART + 'a> {
     line_idx: Cell<usize>,
     line_complete: Cell<bool>,
     receiving: Cell<bool>,
+    baud_rate: Cell<u32>,
 }
 
 impl<'a, U: UART> Console<'a, U> {
     pub fn new(uart: &'a U,
+               baud_rate: u32,
                tx_buffer: &'static mut [u8],
                rx_buffer: &'static mut [u8],
                line_buffer: &'static mut [u8],
@@ -60,12 +62,13 @@ impl<'a, U: UART> Console<'a, U> {
             line_idx: Cell::new(0),
             line_complete: Cell::new(false),
             receiving: Cell::new(false),
+            baud_rate: Cell::new(baud_rate),
         }
     }
 
     pub fn initialize(&self) {
         self.uart.init(uart::UARTParams {
-            baud_rate: 9600,
+            baud_rate: self.baud_rate.get(),
             stop_bits: uart::StopBits::One,
             parity: uart::Parity::None,
             hw_flow_control: false,
