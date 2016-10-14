@@ -123,37 +123,37 @@ pub struct I2CHw {
 }
 
 pub static mut I2C0: I2CHw = I2CHw::new(I2C_BASE_ADDRS[0],
-                                                Some(I2C_SLAVE_BASE_ADDRS[0]),
-                                                pm::Clock::PBA(pm::PBAClock::TWIM0),
-                                                Some(pm::Clock::PBA(pm::PBAClock::TWIS0)),
-                                                nvic::NvicIdx::TWIM0,
-                                                Some(nvic::NvicIdx::TWIS0),
-                                                DMAPeripheral::TWIM0_RX,
-                                                DMAPeripheral::TWIM0_TX);
+                                        Some(I2C_SLAVE_BASE_ADDRS[0]),
+                                        pm::Clock::PBA(pm::PBAClock::TWIM0),
+                                        Some(pm::Clock::PBA(pm::PBAClock::TWIS0)),
+                                        nvic::NvicIdx::TWIM0,
+                                        Some(nvic::NvicIdx::TWIS0),
+                                        DMAPeripheral::TWIM0_RX,
+                                        DMAPeripheral::TWIM0_TX);
 pub static mut I2C1: I2CHw = I2CHw::new(I2C_BASE_ADDRS[1],
-                                                Some(I2C_SLAVE_BASE_ADDRS[1]),
-                                                pm::Clock::PBA(pm::PBAClock::TWIM1),
-                                                Some(pm::Clock::PBA(pm::PBAClock::TWIS0)),
-                                                nvic::NvicIdx::TWIM1,
-                                                Some(nvic::NvicIdx::TWIS1),
-                                                DMAPeripheral::TWIM1_RX,
-                                                DMAPeripheral::TWIM1_TX);
+                                        Some(I2C_SLAVE_BASE_ADDRS[1]),
+                                        pm::Clock::PBA(pm::PBAClock::TWIM1),
+                                        Some(pm::Clock::PBA(pm::PBAClock::TWIS0)),
+                                        nvic::NvicIdx::TWIM1,
+                                        Some(nvic::NvicIdx::TWIS1),
+                                        DMAPeripheral::TWIM1_RX,
+                                        DMAPeripheral::TWIM1_TX);
 pub static mut I2C2: I2CHw = I2CHw::new(I2C_BASE_ADDRS[2],
-                                                None,
-                                                pm::Clock::PBA(pm::PBAClock::TWIM2),
-                                                None,
-                                                nvic::NvicIdx::TWIM2,
-                                                None,
-                                                DMAPeripheral::TWIM2_RX,
-                                                DMAPeripheral::TWIM2_TX);
+                                        None,
+                                        pm::Clock::PBA(pm::PBAClock::TWIM2),
+                                        None,
+                                        nvic::NvicIdx::TWIM2,
+                                        None,
+                                        DMAPeripheral::TWIM2_RX,
+                                        DMAPeripheral::TWIM2_TX);
 pub static mut I2C3: I2CHw = I2CHw::new(I2C_BASE_ADDRS[3],
-                                                None,
-                                                pm::Clock::PBA(pm::PBAClock::TWIM3),
-                                                None,
-                                                nvic::NvicIdx::TWIM3,
-                                                None,
-                                                DMAPeripheral::TWIM3_RX,
-                                                DMAPeripheral::TWIM3_TX);
+                                        None,
+                                        pm::Clock::PBA(pm::PBAClock::TWIM3),
+                                        None,
+                                        nvic::NvicIdx::TWIM3,
+                                        None,
+                                        DMAPeripheral::TWIM3_RX,
+                                        DMAPeripheral::TWIM3_TX);
 
 pub const START: usize = 1 << 13;
 pub const STOP: usize = 1 << 14;
@@ -411,7 +411,8 @@ impl I2CHw {
 
                     // Setup interrupts that we now care about
                     regs.interrupt_enable.set((1 << 3) | (1 << 23));
-                    regs.interrupt_enable.set((1 << 14) | (1 << 13) | (1 << 12) | (1 << 7) | (1 << 6));
+                    regs.interrupt_enable
+                        .set((1 << 14) | (1 << 13) | (1 << 12) | (1 << 7) | (1 << 6));
 
                     if self.slave_read_buffer.is_some() {
                         // Have buffer to send, start reading
@@ -477,7 +478,9 @@ impl I2CHw {
                         // read
                         self.slave_client.map(|client| {
                             self.slave_read_buffer.take().map(|buffer| {
-                                client.command_complete(buffer, nbytes as u8, hil::i2c::SlaveTransmissionType::Read);
+                                client.command_complete(buffer,
+                                                        nbytes as u8,
+                                                        hil::i2c::SlaveTransmissionType::Read);
                             });
                         });
 
@@ -485,7 +488,9 @@ impl I2CHw {
                         // write
                         self.slave_client.map(|client| {
                             self.slave_write_buffer.take().map(|buffer| {
-                                client.command_complete(buffer, nbytes as u8, hil::i2c::SlaveTransmissionType::Write);
+                                client.command_complete(buffer,
+                                                        nbytes as u8,
+                                                        hil::i2c::SlaveTransmissionType::Write);
                             });
                         });
                     }
@@ -635,16 +640,16 @@ impl I2CHw {
         self.slave_registers.map(|slave_registers| {
             let regs: &mut TWISRegisters = unsafe { mem::transmute(slave_registers) };
 
-           // Enable and configure
-           let control = (((self.my_slave_address.get() as usize) & 0x3F) << 16) |
+            // Enable and configure
+            let control = (((self.my_slave_address.get() as usize) & 0x3F) << 16) |
                            (1 << 14) | // SOAM - stretch on address match
                            (1 << 13) | // CUP - count nbytes up
                            (1 << 4)  | // STREN - stretch clock enable
                            (1 << 2);   // SMATCH - ack on slave address
-           regs.control.set(control as u32);
+            regs.control.set(control as u32);
 
-           // Set this separately because that makes the HW happy.
-           regs.control.set((control as u32) | 0x1);
+            // Set this separately because that makes the HW happy.
+            regs.control.set((control as u32) | 0x1);
         });
     }
 }
@@ -778,7 +783,7 @@ impl hil::i2c::I2CSlave for I2CHw {
     }
 }
 
-impl hil::i2c::I2CMasterSlave for I2CHw { }
+impl hil::i2c::I2CMasterSlave for I2CHw {}
 
 interrupt_handler!(twim0_handler, TWIM0, {
     I2C0.disable_interrupts()

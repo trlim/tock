@@ -1,4 +1,3 @@
-
 use core::fmt::*;
 use kernel::hil::Controller;
 use kernel::hil::uart::{self, UART};
@@ -15,7 +14,7 @@ impl Write for Writer {
         let uart = unsafe { &mut sam4l::usart::USART3 };
         if !self.initialized {
             self.initialized = true;
-            uart.init(uart::UARTParams{
+            uart.init(uart::UARTParams {
                 baud_rate: 115200,
                 stop_bits: uart::StopBits::One,
                 parity: uart::Parity::None,
@@ -25,10 +24,10 @@ impl Write for Writer {
             uart.enable_tx();
 
         }
-        //XXX: I'd like to get this working the "right" way, but I'm not sure how
+        // XXX: I'd like to get this working the "right" way, but I'm not sure how
         for c in s.bytes() {
             uart.send_byte(c);
-            while !uart.tx_ready() {};
+            while !uart.tx_ready() {}
         }
         Ok(())
     }

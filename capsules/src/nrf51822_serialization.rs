@@ -32,8 +32,8 @@ pub struct Nrf51822Serialization<'a, U: UART + 'a> {
 impl<'a, U: UART> Nrf51822Serialization<'a, U> {
     pub fn new(uart: &'a U,
                tx_buffer: &'static mut [u8],
-               rx_buffer: &'static mut [u8],
-               ) -> Nrf51822Serialization<'a, U> {
+               rx_buffer: &'static mut [u8])
+               -> Nrf51822Serialization<'a, U> {
         Nrf51822Serialization {
             uart: uart,
             app: TakeCell::empty(),
@@ -43,14 +43,12 @@ impl<'a, U: UART> Nrf51822Serialization<'a, U> {
     }
 
     pub fn initialize(&self) {
-        self.uart.init(
-            uart::UARTParams {
-                baud_rate: 250000,
-                stop_bits: uart::StopBits::One,
-                parity: uart::Parity::Even,
-                hw_flow_control: true,
-            }
-        );
+        self.uart.init(uart::UARTParams {
+            baud_rate: 250000,
+            stop_bits: uart::StopBits::One,
+            parity: uart::Parity::Even,
+            hw_flow_control: true,
+        });
         self.rx_buffer.take().map(|buffer| {
             self.uart.receive(buffer, 1);
         });

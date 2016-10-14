@@ -1,5 +1,4 @@
 /// UART hardware interface
-
 #[derive(Copy, Clone)]
 pub enum StopBits {
     One = 0,
@@ -52,7 +51,7 @@ pub trait UART {
     fn init(&self, params: UARTParams);
 
     /// Transmit data
-    //XXX: change this to Amit's EitherBuffer
+    // XXX: change this to Amit's EitherBuffer
     fn transmit(&self, tx_data: &'static mut [u8], tx_len: usize);
 
     /// Receive data until buffer is full
@@ -81,4 +80,3 @@ pub trait Client {
     /// UART receive complete
     fn receive_complete(&self, rx_buffer: &'static mut [u8], rx_len: usize, error: Error);
 }
-

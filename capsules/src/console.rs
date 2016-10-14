@@ -64,14 +64,12 @@ impl<'a, U: UART> Console<'a, U> {
     }
 
     pub fn initialize(&self) {
-        self.uart.init(
-            uart::UARTParams {
-                baud_rate: 9600,
-                stop_bits: uart::StopBits::One,
-                parity: uart::Parity::None,
-                hw_flow_control: false,
-            }
-        );
+        self.uart.init(uart::UARTParams {
+            baud_rate: 9600,
+            stop_bits: uart::StopBits::One,
+            parity: uart::Parity::None,
+            hw_flow_control: false,
+        });
     }
 }
 
@@ -103,7 +101,7 @@ impl<'a, U: UART> Driver for Console<'a, U> {
         match subscribe_num {
             0 /* read line */ => {
                 self.apps.enter(callback.app_id(), |app, _| {
-                    panic!("readline");
+                    panic!("readline is borked right now. Don't call it");
                     app.read_callback = Some(callback);
 
                     // start receiving, only needs to be started once
@@ -118,7 +116,6 @@ impl<'a, U: UART> Driver for Console<'a, U> {
                     if self.line_complete.get() {
                         app.read_buffer = app.read_buffer.take().map(|mut rb| {
                             self.line_buffer.map(|line| {
-                                panic!("got completed line: {},{},{},{}", line[0] as char, line[1] as char, line[2] as char, line[3] as char);
                                 // copy until newline or app buffer is full
                                 let mut max_idx = self.line_idx.get();
                                 if rb.len() < self.line_idx.get() {
@@ -259,9 +256,9 @@ impl<'a, U: UART> Client for Console<'a, U> {
     }
 
     fn receive_complete(&self, rx_buffer: &'static mut [u8], rx_len: usize, error: uart::Error) {
-        //if error != uart::Error::CommandComplete {
+        // if error != uart::Error::CommandComplete {
         //    panic!("UART error: {:x}", error as u32);
-        //}
+        // }
 
         // always always always replace the rx buffer
         self.rx_buffer.replace(rx_buffer);
@@ -294,79 +291,77 @@ impl<'a, U: UART> Client for Console<'a, U> {
 
 
 
-        /*
         // old readline code
-        unsafe {sam4l::gpio::PA[18].clear();}
-
-        if error != uart::Error::CommandComplete {
-            panic!("UART error: {:x}", error as u32);
-        }
-
-        let c = rx_buffer[0];
-        self.rx_buffer.replace(rx_buffer);
-
+        // unsafe {sam4l::gpio::PA[18].clear();}
+        //
+        // if error != uart::Error::CommandComplete {
+        // panic!("UART error: {:x}", error as u32);
+        // }
+        //
+        // let c = rx_buffer[0];
+        // self.rx_buffer.replace(rx_buffer);
+        //
         // if line was complete, time to start overwriting it
-        if self.line_complete.get() {
-            self.line_complete.set(false);
-            self.line_idx.set(0);
-            self.line_buffer.map(|line| {
-                panic!("dropped it: {},{},{},{}", line[0] as char, line[1] as char, line[2] as char, line[3] as char);
-            });
-        }
-
+        // if self.line_complete.get() {
+        // self.line_complete.set(false);
+        // self.line_idx.set(0);
+        // self.line_buffer.map(|line| {
+        // });
+        // }
+        //
         // write character to line buffer
-        self.line_buffer.map(|line| {
-            line[self.line_idx.get()] = c;
-            self.line_idx.set(self.line_idx.get()+1);
-        });
-
+        // self.line_buffer.map(|line| {
+        // line[self.line_idx.get()] = c;
+        // self.line_idx.set(self.line_idx.get()+1);
+        // });
+        //
         // check if the line is complete
-        if c as char == '\n' || self.line_idx.get() >= self.line_buffer.map_or(0, |buf| buf.len()) {
-            self.line_complete.set(true);
-
-            // send line to apps if any are subscribed
-            let mut buffer_sent = Cell::new(false);
-            self.apps.each(|app| {
-                buffer_sent.set(true);
-
-                app.read_buffer = app.read_buffer.take().map(|mut rb| {
-                    self.line_buffer.map(|line| {
-                        // copy until newline or app buffer is full
-                        let mut max_idx = self.line_idx.get();
-                        if rb.len() < self.line_idx.get() {
-                            max_idx = rb.len();
-                        }
-
-                        // copy over data to app buffer
-                        for idx in 0..max_idx {
-                            rb.as_mut()[idx] = line[idx];
-                        }
-
-                        // call application handler
-                        app.read_callback.as_mut().map(|cb| {
-                            let buf = rb.as_mut();
-                            unsafe {sam4l::gpio::PA[25].toggle();}
-                            cb.schedule(max_idx, (buf.as_ptr() as usize), 0);
-                        });
-                    });
-
-                    rb
-                });
-            });
-
-            // if sent to an app, clear the line so it can't get sent twice
-            if buffer_sent.get() {
-                self.line_complete.set(false);
-                self.line_idx.set(0);
-            }
-        }
-
+        // if c as char == '\n' ||
+        //      self.line_idx.get() >= self.line_buffer.map_or(0, |buf| buf.len()) {
+        // self.line_complete.set(true);
+        //
+        // send line to apps if any are subscribed
+        // let mut buffer_sent = Cell::new(false);
+        // self.apps.each(|app| {
+        // buffer_sent.set(true);
+        //
+        // app.read_buffer = app.read_buffer.take().map(|mut rb| {
+        // self.line_buffer.map(|line| {
+        // copy until newline or app buffer is full
+        // let mut max_idx = self.line_idx.get();
+        // if rb.len() < self.line_idx.get() {
+        // max_idx = rb.len();
+        // }
+        //
+        // copy over data to app buffer
+        // for idx in 0..max_idx {
+        // rb.as_mut()[idx] = line[idx];
+        // }
+        //
+        // call application handler
+        // app.read_callback.as_mut().map(|cb| {
+        // let buf = rb.as_mut();
+        // unsafe {sam4l::gpio::PA[25].toggle();}
+        // cb.schedule(max_idx, (buf.as_ptr() as usize), 0);
+        // });
+        // });
+        //
+        // rb
+        // });
+        // });
+        //
+        // if sent to an app, clear the line so it can't get sent twice
+        // if buffer_sent.get() {
+        // self.line_complete.set(false);
+        // self.line_idx.set(0);
+        // }
+        // }
+        //
         // keep collecting more bytes
-        self.rx_buffer.take().map(|buffer| {
-            unsafe {sam4l::gpio::PA[18].set();}
-            self.uart.receive(buffer, 1);
-        });
-        */
+        // self.rx_buffer.take().map(|buffer| {
+        // unsafe {sam4l::gpio::PA[18].set();}
+        // self.uart.receive(buffer, 1);
+        // });
+        //
     }
 }
-

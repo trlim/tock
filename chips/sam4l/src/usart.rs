@@ -3,10 +3,12 @@
 // rust language modules
 use core::mem;
 use core::cell::Cell;
+
 // local modules
 use nvic;
 use dma;
 use pm;
+
 // other modules
 use kernel::hil;
 use kernel::common::take_cell::TakeCell;

@@ -71,7 +71,10 @@ pub trait I2CHwMasterClient {
 /// Client interface for capsules that use I2CSlave devices.
 pub trait I2CHwSlaveClient {
     /// Called when an I2C command completed.
-    fn command_complete(&self, buffer: &'static mut [u8], length: u8, transmission_type: SlaveTransmissionType);
+    fn command_complete(&self,
+                        buffer: &'static mut [u8],
+                        length: u8,
+                        transmission_type: SlaveTransmissionType);
 
     /// Called from the I2C slave hardware to say that a Master has sent us
     /// a read message, but the driver did not have a buffer containing data
