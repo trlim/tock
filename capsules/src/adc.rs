@@ -62,8 +62,8 @@ impl<'a, A: AdcSingle + 'a> Driver for ADC<'a, A> {
                 0
             }
 
-            //default
-            _ => -1
+            // default
+            _ => -1,
         }
     }
 }

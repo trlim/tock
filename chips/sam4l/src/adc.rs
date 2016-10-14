@@ -5,7 +5,7 @@
 // all samples
 //   - are 12 bits
 //   - use the ground pad as the negative reference
-//   - use a 1V positive reference
+//   - use a VCC/2 positive reference
 //   - are hardware left justified (16 bits wide, bottom 4 bits empty)
 //
 // NOTE: The pin labels/assignments on the Firestorm schematic are
@@ -33,9 +33,9 @@
 
 use core::{intrinsics, ptr};
 use core::cell::Cell;
+use core::mem;
 use kernel::common::take_cell::TakeCell;
 use kernel::common::volatile_cell::VolatileCell;
-use core::mem;
 use kernel::hil;
 use kernel::hil::adc;
 use kernel::hil::adc::AdcSingle;
@@ -102,14 +102,13 @@ impl Adc {
         // Disable SEOC interrupt
         regs.idr.set(0x00000001);
         // Read the value from the LCV register.
-        // Note that since samples are left-justified (HWLA mode)
-        // the sample is 16 bits wide
+        // The sample is 16 bits wide
         val = (regs.lcv.get() & 0xffff) as u16;
         if self.client.is_none() {
             return;
         }
         self.client.map(|client| {
-          client.sample_done(val);
+            client.sample_done(val);
         });
     }
 }
@@ -133,14 +132,14 @@ impl AdcSingle for Adc {
             }
 
             // 3, Enable the ADC
-            let mut cr: u32= regs.cr.get();
+            let mut cr: u32 = regs.cr.get();
             cr |= 1 << 8;
             regs.cr.set(cr);
 
             // 4. Wait until ADC ready
             while regs.sr.get() & (1 << 24) == 0 {}
             // 5. Turn on bandgap and reference buffer
-            let cr2: u32= (1 << 10) | (1 << 8) | (1 << 4);
+            let cr2: u32 = (1 << 10) | (1 << 8) | (1 << 4);
             regs.cr.set(cr2);
 
             // 6. Configure the ADCIFE
@@ -165,7 +164,7 @@ impl AdcSingle for Adc {
             // negative input, and the ADC channel as the positive. Since
             // this is a single-ended sample, the bipolar bit is set to zero.
             // Trigger select is set to zero because this denotes a software
-            // sample. Gain is 1x (set to 0). Resolution is set to 12 bits
+            // sample. Gain is 0.5x (set to 111). Resolution is set to 12 bits
             // (set to 0). The one trick is that the half word left adjust
             // (HWLA) is set to 1. This means that both 12-bit and 8-bit
             // samples are left justified to the lower 16 bits. So they share
@@ -181,7 +180,7 @@ impl AdcSingle for Adc {
             cfg |= 0x00000000; // GCOMP    =   0 (no gain error corr)
             cfg |= 0x00000070; // GAIN     = 111 (0.5x gain)
             cfg |= 0x00000000; // BIPOLAR  =   0 (not bipolar)
-            cfg |= 0x00000001; // HWLA     =   1 (left justify value)
+            cfg |= 0x00000000; // HWLA     =   0 (no left justify value)
             regs.seqcfg.set(cfg);
             // Enable end of conversion interrupt
             regs.ier.set(1);
