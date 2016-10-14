@@ -198,6 +198,7 @@ impl USART {
         if self.usart_rx_state.get() == USARTStateRX::DMA_Receiving {
             self.disable_rx();
             self.disable_rx_interrupts();
+            self.usart_rx_state.set(USARTStateRX::Idle);
 
             // get buffer
             let mut length = 0;
@@ -207,6 +208,7 @@ impl USART {
                 rx_dma.disable();
                 buf
             });
+            self.rx_len.set(0);
 
             // alert client
             self.client.map(|usartclient| {
@@ -220,8 +222,6 @@ impl USART {
                     }
                 });
             });
-            self.rx_len.set(0);
-            self.usart_rx_state.set(USARTStateRX::Idle);
         }
     }
 
@@ -229,6 +229,7 @@ impl USART {
         if self.usart_tx_state.get() == USARTStateTX::DMA_Transmitting {
             self.disable_tx();
             self.disable_tx_interrupts();
+            self.usart_tx_state.set(USARTStateTX::Idle);
 
             // get buffer
             let mut length = 0;
@@ -238,6 +239,7 @@ impl USART {
                 tx_dma.disable();
                 buf
             });
+            self.tx_len.set(0);
 
             // alert client
             self.client.map(|usartclient| {
@@ -251,8 +253,6 @@ impl USART {
                     }
                 });
             });
-            self.tx_len.set(0);
-            self.usart_tx_state.set(USARTStateTX::Idle);
         }
     }
 

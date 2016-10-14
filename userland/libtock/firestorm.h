@@ -121,6 +121,8 @@ void nrf51822_serialization_setup_rx_buffer (char* rx, int rx_len);
 // Write a packet to the BLE Serialization connectivity processor.
 void nrf51822_serialization_write (char* tx, int tx_len);
 
+void nrf51822_WAKEME_WAKEME_WAKEME();
+
 #ifdef __cplusplus
 }
 #endif

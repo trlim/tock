@@ -111,3 +111,7 @@ void nrf51822_serialization_write (char* tx, int tx_len) {
   // Do the write!!!!!
   command(5, 0, 0);
 }
+
+void nrf51822_WAKEME_WAKEME_WAKEME() {
+  command(5, 9001, 0);
+}
