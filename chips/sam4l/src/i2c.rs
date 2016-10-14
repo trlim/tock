@@ -113,6 +113,7 @@ pub struct I2CHw {
     slave_client: TakeCell<&'static hil::i2c::I2CHwSlaveClient>,
     on_deck: TakeCell<(DMAPeripheral, usize)>,
 
+    slave_enabled: Cell<bool>,
     my_slave_address: Cell<u8>,
     slave_read_buffer: TakeCell<&'static mut [u8]>,
     slave_read_buffer_len: Cell<u8>,
@@ -184,6 +185,7 @@ impl I2CHw {
             slave_client: TakeCell::empty(),
             on_deck: TakeCell::empty(),
 
+            slave_enabled: Cell::new(false),
             my_slave_address: Cell::new(0),
             slave_read_buffer: TakeCell::empty(),
             slave_read_buffer_len: Cell::new(0),
@@ -206,7 +208,10 @@ impl I2CHw {
         // Ultimately we should understand what the heck these parameters actually mean and either
         // confirm them or replace them. They almost certainly depend on the clock speed of the
         // CPU, so we'll need to change them if we change the CPU clock speed.
-        let (exp, data, stasto, high, low) = (3, 4, 10, 10, 10);
+        // let (exp, data, stasto, high, low) = (3, 4, 10, 10, 10);
+        // let (exp, data, stasto, high, low) = (0, 4, 10, 10, 10);
+        // let (exp, data, stasto, high, low) = (0, 4, 10, 10, 10);
+        let (exp, data, stasto, high, low) = (0, 4, 10, 3, 3);
 
         let cwgr = ((exp & 0x7) << 28) | ((data & 0xF) << 24) | ((stasto & 0xFF) << 16) |
                    ((high & 0xFF) << 8) | ((low & 0xFF) << 0);
@@ -486,6 +491,20 @@ impl I2CHw {
 
                     } else {
                         // write
+
+                        let len = self.slave_write_buffer_len.get();
+                        let idx = self.slave_write_buffer_index.get();
+
+                        if len > idx {
+                            self.slave_write_buffer.map(|buffer| {
+                                buffer[idx as usize] = regs.receive_holding.get() as u8;
+                            });
+                            self.slave_write_buffer_index.set(idx + 1);
+                        } else {
+                            // Just drop on floor
+                            regs.receive_holding.get();
+                        }
+
                         self.slave_client.map(|client| {
                             self.slave_write_buffer.take().map(|buffer| {
                                 client.command_complete(buffer,
@@ -525,18 +544,28 @@ impl I2CHw {
                 } else if interrupts & (1 << 0) > 0 {
                     // Receive byte ready.
 
-                    // Only read in byte if BTF is set. Otherwise there can
-                    // be spurious interrupts for some reason.
-                    if self.slave_write_buffer.is_some() && (status & (1 << 23) > 0) {
-                        // Have buffer to read into
-                        let len = self.slave_write_buffer_len.get();
-                        let idx = self.slave_write_buffer_index.get();
+                    if self.slave_write_buffer.is_some()  {
+                        // Check that the BTF byte is set at the beginning of
+                        // the transfer. Sometimes a spurious RX ready interrupt
+                        // happens at the beginning (right after the address
+                        // byte) that we need to ignore, and checking the BTF
+                        // bit fixes that. However, sometimes in the middle of a
+                        // transfer we get an RXREADY interrupt where the BTF
+                        // bit is NOT set. I don't know why.
+                        if status & (1 << 23) > 0 || self.slave_write_buffer_index.get() > 0 {
+                            // Have buffer to read into
+                            let len = self.slave_write_buffer_len.get();
+                            let idx = self.slave_write_buffer_index.get();
 
-                        if len > idx {
-                            self.slave_write_buffer.map(|buffer| {
-                                buffer[idx as usize] = regs.receive_holding.get() as u8;
-                            });
-                            self.slave_write_buffer_index.set(idx + 1);
+                            if len > idx {
+                                self.slave_write_buffer.map(|buffer| {
+                                    buffer[idx as usize] = regs.receive_holding.get() as u8;
+                                });
+                                self.slave_write_buffer_index.set(idx + 1);
+                            } else {
+                                // Just drop on floor
+                                regs.receive_holding.get();
+                            }
                         } else {
                             // Just drop on floor
                             regs.receive_holding.get();
@@ -558,19 +587,22 @@ impl I2CHw {
         self.slave_write_buffer.replace(buffer);
         self.slave_write_buffer_len.set(len);
 
-        self.slave_registers.map(|slave_registers| {
-            let regs: &mut TWISRegisters = unsafe { mem::transmute(slave_registers) };
+        if self.slave_enabled.get() {
 
-            let status = regs.status.get();
-            let imr = regs.interrupt_mask.get();
-            let interrupts = status & imr;
+            self.slave_registers.map(|slave_registers| {
+                let regs: &mut TWISRegisters = unsafe { mem::transmute(slave_registers) };
 
-            // Address match status bit still set, so we need to tell the TWIS
-            // to continue.
-            if (interrupts & (1 << 16) > 0) && (status & (1 << 5) == 0) {
-                regs.status_clear.set(status);
-            }
-        });
+                let status = regs.status.get();
+                let imr = regs.interrupt_mask.get();
+                let interrupts = status & imr;
+
+                // Address match status bit still set, so we need to tell the TWIS
+                // to continue.
+                if (interrupts & (1 << 16) > 0) && (status & (1 << 5) == 0) {
+                    regs.status_clear.set(status);
+                }
+            });
+        }
     }
 
     /// Prepare a buffer for the I2C master to read from after a read call.
@@ -580,36 +612,39 @@ impl I2CHw {
         self.slave_read_buffer_len.set(len);
         self.slave_read_buffer_index.set(0);
 
-        // Check to see if we should send the first byte.
-        self.slave_registers.map(|slave_registers| {
-            let regs: &mut TWISRegisters = unsafe { mem::transmute(slave_registers) };
+        if self.slave_enabled.get() {
 
-            let status = regs.status.get();
-            let imr = regs.interrupt_mask.get();
-            let interrupts = status & imr;
+            // Check to see if we should send the first byte.
+            self.slave_registers.map(|slave_registers| {
+                let regs: &mut TWISRegisters = unsafe { mem::transmute(slave_registers) };
 
-            // Address match status bit still set. We got this function
-            // call in response to an incoming read. Send the first
-            // byte.
-            if (interrupts & (1 << 16) > 0) && (status & (1 << 5) > 0) {
-                regs.status_clear.set(1 << 23);
+                let status = regs.status.get();
+                let imr = regs.interrupt_mask.get();
+                let interrupts = status & imr;
 
-                let len = self.slave_read_buffer_len.get();
+                // Address match status bit still set. We got this function
+                // call in response to an incoming read. Send the first
+                // byte.
+                if (interrupts & (1 << 16) > 0) && (status & (1 << 5) > 0) {
+                    regs.status_clear.set(1 << 23);
 
-                if len >= 1 {
-                    self.slave_read_buffer.map(|buffer| {
-                        regs.transmit_holding.set(buffer[0] as u32);
-                    });
-                    self.slave_read_buffer_index.set(1);
-                } else {
-                    // Send dummy byte
-                    regs.transmit_holding.set(0x75);
+                    let len = self.slave_read_buffer_len.get();
+
+                    if len >= 1 {
+                        self.slave_read_buffer.map(|buffer| {
+                            regs.transmit_holding.set(buffer[0] as u32);
+                        });
+                        self.slave_read_buffer_index.set(1);
+                    } else {
+                        // Send dummy byte
+                        regs.transmit_holding.set(0x75);
+                    }
+
+                    // Make it happen by clearing status.
+                    regs.status_clear.set(status);
                 }
-
-                // Make it happen by clearing status.
-                regs.status_clear.set(status);
-            }
-        });
+            });
+        }
     }
 
     fn slave_enable_interrupts(&self) {
@@ -749,10 +784,14 @@ impl hil::i2c::I2CSlave for I2CHw {
             // Enable NVIC
             self.slave_enable_interrupts();
         });
+
+        self.slave_enabled.set(true);
     }
 
     /// This disables the entire I2C peripheral
     fn disable(&self) {
+        self.slave_enabled.set(false);
+
         self.slave_registers.map(|slave_registers| {
             let regs: &mut TWISRegisters = unsafe { mem::transmute(slave_registers) };
 
@@ -798,8 +837,8 @@ interrupt_handler!(twim3_handler, TWIM3, {
     I2C3.disable_interrupts()
 });
 interrupt_handler!(twis0_handler, TWIS0, {
-    I2C3.slave_disable_interrupts()
+    // I2C0.slave_disable_interrupts()
 });
 interrupt_handler!(twis1_handler, TWIS1, {
-    I2C3.slave_disable_interrupts()
+    // I2C1.slave_disable_interrupts()
 });

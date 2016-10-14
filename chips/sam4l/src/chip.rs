@@ -1,6 +1,6 @@
+use adc;
 use ast;
 use cortexm4;
-// use adc;
 use dma;
 use flashcalw;
 use gpio;
@@ -42,6 +42,13 @@ impl Sam4l {
 
         i2c::I2C1.set_dma(&dma::DMAChannels[7]);
         dma::DMAChannels[7].client = Some(&mut i2c::I2C1);
+
+        usart::USART0.set_dma(&mut dma::DMAChannels[8], &mut dma::DMAChannels[9]);
+        dma::DMAChannels[8].client = Some(&mut usart::USART0);
+        dma::DMAChannels[9].client = Some(&mut usart::USART0);
+
+        i2c::I2C0.set_dma(&dma::DMAChannels[10]);
+        dma::DMAChannels[10].client = Some(&mut i2c::I2C0);
 
         Sam4l {
             mpu: cortexm4::mpu::MPU::new(),
@@ -101,8 +108,11 @@ impl Chip for Sam4l {
                     TWIM2 => i2c::I2C2.handle_interrupt(),
                     TWIM3 => i2c::I2C3.handle_interrupt(),
 
+                    TWIS0 => i2c::I2C0.handle_slave_interrupt(),
+                    TWIS1 => i2c::I2C1.handle_slave_interrupt(),
+
                     HFLASHC => flashcalw::flash_controller.handle_interrupt(),
-                    // NvicIdx::ADCIFE   => self.adc.handle_interrupt(),
+                    ADCIFE => adc::ADC.handle_interrupt(),
                     _ => {}
                 }
                 nvic::enable(interrupt);

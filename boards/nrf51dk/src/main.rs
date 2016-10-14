@@ -46,7 +46,8 @@ extern crate nrf51;
 use capsules::timer::TimerDriver;
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use kernel::{Chip, SysTick};
-use kernel::hil::gpio::GPIOPin;
+use kernel::hil::gpio::Pin;
+use kernel::hil::uart::UART;
 use nrf51::timer::ALARM1;
 use nrf51::timer::TimerAlarm;
 
@@ -140,7 +141,7 @@ pub unsafe fn reset_handler() {
         ],
         4 * 22);
 
-    nrf51::gpio::PORT[LED1_PIN].enable_output();
+    nrf51::gpio::PORT[LED1_PIN].make_output();
     nrf51::gpio::PORT[LED1_PIN].clear();
 
     let gpio = static_init!(
@@ -158,6 +159,13 @@ pub unsafe fn reset_handler() {
                                        kernel::Container::create()),
         24);
     nrf51::uart::UART0.set_client(console);
+
+    nrf51::uart::UART0.init(kernel::hil::uart::UARTParams {
+        baud_rate: 115200,
+        data_bits: 8,
+        parity: kernel::hil::uart::Parity::None,
+        mode: kernel::hil::uart::Mode::Normal,
+    });
 
     // The timer driver is built on top of hardware timer 1, which is implemented
     // as an HIL Alarm. Timer 0 has some special functionality for the BLE transciever,
@@ -205,6 +213,7 @@ pub unsafe fn reset_handler() {
     let mut chip = nrf51::chip::NRF51::new();
     chip.systick().reset();
     chip.systick().enable(true);
+
     kernel::main(platform, &mut chip, load_process());
 
 }
@@ -218,13 +227,13 @@ pub unsafe extern "C" fn rust_begin_unwind(_args: &Arguments,
                                            _file: &'static str,
                                            _line: usize)
                                            -> ! {
-    use kernel::hil::gpio::GPIOPin;
+    use kernel::hil::gpio::Pin;
 
     let led0 = &nrf51::gpio::PORT[LED1_PIN];
     let led1 = &nrf51::gpio::PORT[LED2_PIN];
 
-    led0.enable_output();
-    led1.enable_output();
+    led0.make_output();
+    led1.make_output();
     loop {
         for _ in 0..100000 {
             led0.set();

@@ -15,6 +15,7 @@ use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use capsules::virtual_i2c::{I2CDevice, MuxI2C};
 use kernel::{Chip, MPU, Platform};
 use kernel::hil::Controller;
+use kernel::hil::gpio::PinCtl;
 use kernel::hil::spi::SpiMaster;
 use sam4l::usart;
 
@@ -317,7 +318,7 @@ pub unsafe fn reset_handler() {
                      &mut console::READ_BUF,
                      kernel::Container::create()),
         256/8);
-    usart::USART3.set_client(console);
+    usart::USART3.set_uart_client(console);
 
     // Create the Nrf51822Serialization driver for passing BLE commands
     // over UART to the nRF51822 radio.
@@ -327,7 +328,7 @@ pub unsafe fn reset_handler() {
                                    &mut nrf51822_serialization::WRITE_BUF,
                                    &mut nrf51822_serialization::READ_BUF),
         608/8);
-    usart::USART2.set_client(nrf_serialization);
+    usart::USART2.set_uart_client(nrf_serialization);
 
     let ast = &sam4l::ast::AST;
 
@@ -342,6 +343,7 @@ pub unsafe fn reset_handler() {
 
     // Configure the TMP006. Device address 0x40
     let tmp006_i2c = static_init!(I2CDevice, I2CDevice::new(mux_i2c, 0x40), 32);
+    sam4l::gpio::PA[9].set_input_mode(kernel::hil::gpio::InputMode::PullUp);
     let tmp006 = static_init!(
         capsules::tmp006::TMP006<'static>,
         capsules::tmp006::TMP006::new(tmp006_i2c,

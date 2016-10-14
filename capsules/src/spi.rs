@@ -2,6 +2,7 @@ use core::cell::Cell;
 use core::cmp;
 use kernel::{AppId, Driver, Callback, AppSlice, Shared};
 use kernel::common::take_cell::TakeCell;
+use kernel::hil;
 use kernel::hil::spi::{SpiMaster, SpiMasterClient};
 use kernel::hil::spi::ClockPhase;
 use kernel::hil::spi::ClockPolarity;
@@ -217,14 +218,15 @@ impl<'a, S: SpiMaster> Driver for Spi<'a, S> {
             2 /* set chip select */ => {
                 let cs = arg1 as u8;
                 if cs <= 3 {
-                    self.spi_master.set_chip_select(cs);
+                    self.spi_master.set_chip_select(hil::spi::ChipSelect::Number(cs));
                     0
                 } else {
                     -1
                 }
             }
             3 /* get chip select */ => {
-                self.spi_master.get_chip_select() as isize
+                // self.spi_master.get_chip_select() as isize
+                0
             }
             4 /* set baud rate */ => {
                 self.spi_master.set_rate(arg1 as u32) as isize

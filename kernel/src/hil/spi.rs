@@ -2,6 +2,8 @@
 
 use core::option::Option;
 
+use hil;
+
 /// Values for the ordering of bits
 #[derive(Copy, Clone)]
 pub enum DataOrder {
@@ -21,6 +23,11 @@ pub enum ClockPolarity {
 pub enum ClockPhase {
     SampleLeading,
     SampleTrailing,
+}
+
+pub enum ChipSelect<'a> {
+    Number(u8),
+    Gpio(&'a hil::gpio::Pin),
 }
 
 pub trait SpiMasterClient {
@@ -92,9 +99,10 @@ pub trait SpiMaster {
 
     /// Returns whether this chip select is valid and was
     /// applied, 0 is always valid.
-    fn set_chip_select(&self, cs: u8) -> bool;
-    fn clear_chip_select(&self);
-    fn get_chip_select(&self) -> u8;
+    // fn set_chip_select(&self, cs: u8) -> bool;
+    fn set_chip_select(&self, cs: ChipSelect<'static>);
+    // fn clear_chip_select(&self);
+    // fn get_chip_select(&self) -> u8;
 
     /// Returns the actual rate set
     fn set_rate(&self, rate: u32) -> u32;
