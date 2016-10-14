@@ -41,6 +41,15 @@ int timer_oneshot(uint32_t interval_ms);
 int timer_stop();
 
 /*
+ *
+ * Capture the current value of the timer counter
+ *
+ * Potential problem: timer is 32 bits?
+ *
+ */
+unsigned int timer_read();
+
+/*
  * Blocks for the given amount of time in millisecond.
  *
  * This is a wrapper around the `timer` interface, so calling this will cancel
