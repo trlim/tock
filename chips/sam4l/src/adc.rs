@@ -102,8 +102,7 @@ impl Adc {
         // Disable SEOC interrupt
         regs.idr.set(0x00000001);
         // Read the value from the LCV register.
-        // Note that since samples are left-justified (HWLA mode)
-        // the sample is 16 bits wide
+        // The sample is 16 bits wide
         val = (regs.lcv.get() & 0xffff) as u16;
         if self.client.is_none() {
             return;
@@ -181,7 +180,7 @@ impl AdcSingle for Adc {
             cfg |= 0x00000000; // GCOMP    =   0 (no gain error corr)
             cfg |= 0x00000070; // GAIN     = 111 (0.5x gain)
             cfg |= 0x00000000; // BIPOLAR  =   0 (not bipolar)
-            cfg |= 0x00000001; // HWLA     =   1 (left justify value)
+            cfg |= 0x00000000; // HWLA     =   0 (no left justify value)
             regs.seqcfg.set(cfg);
             // Enable end of conversion interrupt
             regs.ier.set(1);
