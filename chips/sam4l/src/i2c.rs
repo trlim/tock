@@ -398,6 +398,15 @@ impl I2CHw {
 
             // Check for errors.
             if interrupts & ((1 << 14) | (1 << 13) | (1 << 12) | (1 << 7) | (1 << 6)) > 0 {
+                // From the datasheet: If a bus error (misplaced START or STOP)
+                // condition is detected, the SR.BUSERR bit is set and the TWIS
+                // waits for a new START condition.
+                if interrupts & (1 << 14) > 0 {
+                    // Restart and wait for the next start byte
+                    regs.status_clear.set(status);
+                    return;
+                }
+
                 panic!("ERR 0x{:x}", interrupts);
             }
 
