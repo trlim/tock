@@ -401,11 +401,11 @@ impl I2CHw {
                 // From the datasheet: If a bus error (misplaced START or STOP)
                 // condition is detected, the SR.BUSERR bit is set and the TWIS
                 // waits for a new START condition.
-                // if interrupts & (1 << 14) > 0 {
-                //     // Restart and wait for the next start byte
-                //     regs.status_clear.set(status);
-                //     return;
-                // }
+                if interrupts & (1 << 14) > 0 {
+                    // Restart and wait for the next start byte
+                    regs.status_clear.set(status);
+                    return;
+                }
 
                 let control = regs.control.get();
 
